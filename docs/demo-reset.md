@@ -24,7 +24,14 @@ What it does, in order:
 fails while judging. It adds rows only. Archived reputation is left out unless `--with-reputation` is given, so a
 restored scenario A does not put v1.3 on step-up before a live rerun.
 
-Tested on 2026-11-10 against a local copy of the database (a Postgres 18 container loaded with `pg_dump`, never Neon).
-Two resets in a row both worked, and A and B restored. Their hash chains (30 and 35 entries) and every checkpoint
-signature verified after the restore, and so did every mandate signature. No real brand names remained. It has not
-been run against Neon.
+`npm run demo:restore -- A --check` restores inside a transaction, verifies the hash chain, every checkpoint signature
+and every mandate signature, then rolls everything back, so nothing is left in the database.
+
+Tested on 2026-11-10, first against a local copy of the database (a Postgres 18 container loaded with `pg_dump`): two
+resets in a row both worked, and A and B restored with valid hash chains and signatures.
+
+Run against Neon on 2026-11-10, after a full `pg_dump` backup. It archived A (30 recorder entries) and B (35), and left
+2 operators, 3 agent versions, 1 accepted agreement, 23 variants, 0 cases and 2 scorecard runs, with no real brand
+names. `--check` on Neon then restored each scenario inside a transaction: A's chain (30 entries), 30 checkpoint
+signatures and 3 mandate signatures were valid; B's chain (35 entries), 35 checkpoint signatures and its mandate
+signature were valid; both rolled back.

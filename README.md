@@ -20,8 +20,9 @@ Contents: [The problem](#the-problem) · [What is new](#what-is-new) · [Try it]
 ## The problem
 
 AI agents can now pay, but when one buys the wrong thing nobody has agreed who pays for the mistake, and by default the
-merchant absorbs the refund or the chargeback even when the merchant did nothing wrong. Merchants are preparing for
-agent-driven shopping, and who carries the loss is the open question (a PYMNTS survey of 60 US retailers, Sep 2026).
+merchant absorbs the refund or the chargeback even when the merchant did nothing wrong. 93% of merchants in a PYMNTS
+Intelligence survey of 60 US retailers (Sep 2026) say the agent provider should cover losses from an agent's wrong
+purchase, [as reported by Forkast](https://forkast.news/the-agentic-commerce-liability-gap-who-pays-when-the-agent-buys-wrong/).
 A mandate can prove what the buyer authorised; nothing yet makes the party that actually erred, the agent's operator,
 pay for the error.
 
@@ -191,6 +192,7 @@ Postman collection: [docs/reference.md](docs/reference.md).
 | --- | --- | --- |
 | [Verifiable Intent](https://www.mastercard.com/us/en/news-and-trends/stories/2026/verifiable-intent.html) (Mastercard with Google, Mar 2026) | A tamper-resistant record of what the user authorised, aligned with AP2 | What happens after the record shows the agent overstepped: who pays, and the payment itself |
 | [AP2](https://ap2-protocol.org/specification) (Google's Agent Payments Protocol) | Signed intent and cart mandates as non-repudiable proof of intent | Uses the same idea for the buyer's side, then adds the operator's signed, capped liability |
+| [Errandly](https://gh.ali360.cloudns.ch/UBayouski/Errandly) (PayPal AI Hackathon 2026) | A plain-English spending mandate approved once through PayPal vault, a policy engine that pays, pauses or refuses each purchase, and an audit trail | Our closest look-alike for the front half. Recourse adds the back half: deciding fault after a bad purchase and charging the operator on PayPal under a signed, capped agreement |
 | [AgentLair](https://github.com/piiiico/agentlair) | Agent identity, a credential at session start and a log of every tool call, verifiable in a dispute | Recourse's recorder is anchored inside the PayPal order itself, and the outcome is a payment, not only evidence |
 | [proof-of-intent](https://github.com/harshkumarsingh12/proof-of-intent) (PayPal AI Hackathon 2026) | Checks the agent's cart against the shopper's signed intent before capture; answers disputes with evidence or a fair refund | Shifts the loss from the merchant to the operator, by contract, and decides fault with a counterfactual from the frozen snapshot |
 | [SettleAI](https://github.com/Mokshitsharma/settleai) (PayPal AI Hackathon 2026) | Escrow for work that AI agents hire people to do, with a liability finding on disputes | Recourse is for agent purchases from merchants, and charges the operator after the fact rather than holding funds |

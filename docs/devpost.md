@@ -17,8 +17,10 @@ PayPal's liability model doesn't change; the merchant recovers by contract from 
 ## Potential Impact
 
 AI agents can now pay, but when one buys the wrong thing nobody has agreed who pays, so the merchant absorbs the
-refund or the chargeback by default. Merchants are preparing for agent-driven shopping, and who carries the loss is the
-open question (a PYMNTS survey of 60 US retailers, Sep 2026). Recourse gives each party what it lacks:
+refund or the chargeback by default. 93% of merchants in a PYMNTS Intelligence survey of 60 US retailers (Sep 2026) say
+the agent provider should cover losses from an agent's wrong purchase, as reported by Forkast
+(https://forkast.news/the-agentic-commerce-liability-gap-who-pays-when-the-agent-buys-wrong/). Recourse gives each
+party what it lacks:
 
 - **Merchants** stop paying for agents' mistakes: the operator reimburses them by contract, through PayPal.
 - **Buyers** get their money back without filing a dispute: in scenario A the refund was issued by Recourse on PayPal.
@@ -33,7 +35,8 @@ step-up, and its next checkout returned 422 with nothing charged.
 ## Innovation/Idea
 
 - **Operator liability, signed, capped, auto-charged.** Existing work proves what a user authorised (Mastercard's
-  Verifiable Intent, Google's AP2) or defends merchants in disputes. Recourse moves the loss to the party that erred,
+  Verifiable Intent, Google's AP2), gates the purchase itself (Errandly's mandate and PayPal vault consent), or defends
+  merchants in disputes. Recourse moves the loss to the party that erred,
   under a versioned agreement with a per-incident cap, a total cap and an appeal window, and charges it on PayPal.
 - **A counterfactual from a frozen catalog snapshot.** The catalog the agent saw is stored with its hash at the moment
   it decided. Code checks whether an in-stock listing met every clause. "A compliant alternative existed" is a computed
