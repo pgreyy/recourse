@@ -38,8 +38,11 @@ answers on that copy. Neon itself holds the clean demo (no cases). The scorecard
   favicon and the receipt's header.
 - One collapsible sidebar holds all navigation: Walkthrough (1 Operator, 2 Buyer, 3 Agent run), Console
   (Overview, Cases, Case detail, Agents and operators, Settlements, Scorecard), then For judges, Ask the
-  Clerk and the PayPal sandbox marker. Expanded 248 px, collapsed 64 px (icons, a label on hover or
-  focus); the toggle has `aria-expanded`, Ctrl+B toggles it, the state is remembered in this browser.
+  Clerk and the PayPal sandbox marker. Expanded 248 px: the mark and wordmark, with a collapse icon at
+  the right of the same row. Collapsed 64 px: icons with a label on hover or focus, and the mark itself
+  is the expand button (on hover or focus it shows the expand icon). Both toggles are buttons with
+  `aria-expanded` and a tooltip naming Ctrl+B, which also toggles; the state is remembered in this
+  browser.
   Under 768 px it is a drawer from a menu button (Escape closes it, focus returns to the button).
 - Status labels are ledger stamps: small caps, a crisp border, the word always present; colour only
   repeats it. Every text and background pair meets WCAG AA: checked on 2026-11-10 with a contrast

@@ -125,12 +125,24 @@ export function Shell({ children }: { children: ReactNode }) {
       {drawer && <div className="scrim" onClick={() => setDrawer(false)} aria-hidden="true" />}
       <aside ref={sidebar} id="sidebar" className="sidebar" aria-label="Recourse">
         <div className="sb-top">
+          {/* Collapsed: the mark is the expand button; on hover or focus it shows the expand icon in the same spot. */}
+          <button type="button" className="sb-expand" aria-label="Expand sidebar" aria-expanded={false} aria-controls="sidebar" onClick={toggle}>
+            <span className="sb-expand-mark">
+              <Mark size={28} />
+            </span>
+            <span className="sb-expand-icon">
+              <Icons.panel />
+            </span>
+            <span className="btn-tip" aria-hidden="true">Expand sidebar (Ctrl+B)</span>
+          </button>
+          {/* Expanded: the mark and wordmark go home; the collapse icon sits at the right end of the row. */}
           <Link to="/" className="brand" current={section === '/'}>
-            <Mark size={collapsed && !drawer ? 28 : 26} title={collapsed && !drawer ? 'Recourse, home' : undefined} />
+            <Mark size={26} />
             <span className="wordmark">Recourse</span>
           </Link>
-          <button type="button" className="icon-btn sb-toggle" aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'} aria-expanded={!collapsed} aria-controls="sidebar" title={`${collapsed ? 'Expand' : 'Collapse'} the sidebar (Ctrl+B)`} onClick={toggle}>
+          <button type="button" className="icon-btn sb-toggle" aria-label="Collapse sidebar" aria-expanded={true} aria-controls="sidebar" onClick={toggle}>
             <Icons.panel />
+            <span className="btn-tip" aria-hidden="true">Collapse sidebar (Ctrl+B)</span>
           </button>
           <button type="button" className="icon-btn sb-close" aria-label="Close the menu" onClick={() => setDrawer(false)}>
             <Icons.close />

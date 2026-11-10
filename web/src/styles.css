@@ -63,6 +63,22 @@ a:hover { color: var(--accent-hover); }
 .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
 .sb-toggle { margin-left: auto; }
 .sb-close { display: none; }
+/* the toggle's tooltip, on hover or keyboard focus */
+.sb-toggle, .sb-expand { position: relative; }
+.btn-tip { position: absolute; top: 50%; left: calc(100% + 10px); transform: translateY(-50%); background: var(--ink); color: #fff; font: 500 12.5px var(--sans); padding: 4px 8px; border-radius: 3px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s; z-index: 40; }
+.sb-toggle .btn-tip { left: auto; right: 0; top: calc(100% + 6px); transform: none; }
+.sb-toggle:hover .btn-tip, .sb-toggle:focus-visible .btn-tip, .sb-expand:hover .btn-tip, .sb-expand:focus-visible .btn-tip { opacity: 1; }
+/* collapsed: the mark is the expand button */
+.sb-expand { all: unset; box-sizing: border-box; position: relative; display: none; place-items: center; width: 44px; height: 44px; border-radius: var(--radius); color: var(--ink-2); cursor: pointer; }
+.sb-expand > span:not(.btn-tip) { grid-area: 1 / 1; display: grid; place-items: center; }
+.sb-expand-icon { opacity: 0; }
+.sb-expand:hover, .sb-expand:focus-visible { background: var(--surface-2); color: var(--ink); }
+.sb-expand:hover .sb-expand-mark, .sb-expand:focus-visible .sb-expand-mark { opacity: 0; }
+.sb-expand:hover .sb-expand-icon, .sb-expand:focus-visible .sb-expand-icon { opacity: 1; }
+.sb-expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.app.collapsed .sb-top { justify-content: center; padding: 0; }
+.app.collapsed .sb-expand { display: grid; }
+.app.collapsed .sb-top > .brand, .app.collapsed .sb-toggle { display: none; }
 .sb-nav { flex: 1; overflow-y: auto; padding: var(--s1) 12px; }
 .sb-nav ul, .sb-bottom ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .sb-group { font: 600 11px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding: var(--s2) 12px var(--s1); white-space: nowrap; }
@@ -83,8 +99,6 @@ a:hover { color: var(--accent-hover); }
 .sb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
 
 /* collapsed: the mark and the icons, a label on hover or focus */
-.app.collapsed .sb-top { flex-direction: column; justify-content: center; gap: 4px; height: auto; padding: 12px 0; }
-.app.collapsed .sb-toggle { margin: 0; }
 .app.collapsed .wordmark, .app.collapsed .sb-label, .app.collapsed .sb-step, .app.collapsed .sb-count, .app.collapsed .sb-group { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; padding: 0; }
 .app.collapsed .sb-nav { padding: var(--s1) 10px; }
 .app.collapsed .sb-nav ul + .sb-group + ul { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -115,7 +129,9 @@ a:hover { color: var(--accent-hover); }
   .sb-toggle { display: none; }
   .sb-close { display: inline-grid; margin-left: auto; }
   /* the drawer always shows labels, whatever the desktop state */
-  .app.collapsed .sb-top { flex-direction: row; height: 64px; padding: 0 12px 0 16px; justify-content: flex-start; }
+  .app.collapsed .sb-top { height: 64px; padding: 0 12px 0 16px; justify-content: flex-start; }
+  .app.collapsed .sb-expand { display: none; }
+  .app.collapsed .sb-top > .brand { display: flex; }
   .app.collapsed .wordmark, .app.collapsed .sb-label, .app.collapsed .sb-step, .app.collapsed .sb-count, .app.collapsed .sb-group { position: static; width: auto; height: auto; clip: auto; overflow: visible; }
   .app.collapsed .sb-group { padding: var(--s2) 12px var(--s1); }
   .app.collapsed .sb-item { justify-content: flex-start; padding: 0 10px; width: 100%; }
