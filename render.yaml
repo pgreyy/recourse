@@ -6,7 +6,7 @@
 # skipped when the database is up to date).
 services:
   - type: web
-    name: recourse
+    name: getrecourse
     runtime: node
     region: ohio            # same region as the Neon database (AWS us-east-2)
     plan: free
