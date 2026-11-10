@@ -1,17 +1,19 @@
 # Render Blueprint: one web service for the Recourse API and the screens (served at /app).
 # No values live in this file: every variable is "sync: false", so Render asks for each one when the
 # Blueprint is created. Step by step: docs/render-setup.md.
+# Free plan: no card needed. It sleeps after 15 minutes without traffic; an external ping to /health every
+# 10 minutes keeps it awake. Free services have no pre-deploy step, so migrations run at start (they are
+# skipped when the database is up to date).
 services:
   - type: web
     name: recourse
     runtime: node
     region: ohio            # same region as the Neon database (AWS us-east-2)
-    plan: starter           # a paid instance: it never sleeps, and it can run the pre-deploy migration
+    plan: free
     branch: main
-    autoDeploy: true
+    autoDeployTrigger: commit
     buildCommand: npm ci --include=dev && npm --prefix web ci --include=dev && npm run typecheck && npm run web:build
-    preDeployCommand: npm run migrate
-    startCommand: npm start
+    startCommand: npm run migrate && npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
