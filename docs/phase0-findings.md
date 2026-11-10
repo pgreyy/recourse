@@ -264,6 +264,7 @@ tunnel. Every event below verified **SUCCESS** with `verify-webhook-signature`.
 | PAYMENT.CAPTURE.REFUNDED | 11:02:19Z | 11:02:30Z | refund `0LS076900W798532B`, with our `custom_id` and `invoice_id`, `up` link to the capture |
 | CUSTOMER.DISPUTE.CREATED | 11:20:33Z | 11:20:37Z | `PP-R-HPV-10198011` (dispute created 11:17:01Z) |
 | CUSTOMER.DISPUTE.UPDATED x6 | 11:21:03Z to 11:27:03Z | 4 to 5 s later each | one per status change in the table above |
+| CUSTOMER.DISPUTE.UPDATED | (update_time 11:38:53Z) | 11:39:07Z | no visible change, see below |
 | INVOICING.INVOICE.PAID | 11:34:27Z | 11:34:40Z | `INV2-95DU-ZMNU-CT6S-QVAH`, `PAID`, payment `5CG923857M910110W` |
 
 - Delivery took 4 to 13 s after PayPal created the event. The first dispute event came about 3.5 min
@@ -271,6 +272,11 @@ tunnel. Every event below verified **SUCCESS** with `verify-webhook-signature`.
 - Dispute events are created on PayPal's half-minute marks (hh:mm:03, hh:mm:33): they appear to be
   batched.
 - The polling fallback (`05c`) saw every status change the webhooks reported, within one 30 s poll.
+- An update can carry no visible change: `CUSTOMER.DISPUTE.UPDATED` `WH-24334080YE1725529-9YJ00749NW824753J`
+  arrived at 11:39:07Z (verified SUCCESS), but a GET right after (debug id `ca584c6837962`) showed the
+  same status (`UNDER_REVIEW`), state (`UNDER_PAYPAL_REVIEW`), stage (`CHARGEBACK`), links,
+  `fund_movements` and evidences as before; only `update_time` moved (11:38:53Z). Phase 1 should not
+  treat every update event as a new status: re-read the dispute and compare with the last stored copy.
 
 ### 6. Invoicing v2: pass
 
