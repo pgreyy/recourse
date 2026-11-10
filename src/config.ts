@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './shared/net';
 
 /** Thrown when a setting a feature needs is missing. Routes turn it into 503 with the setting's name. */
 export class ConfigError extends Error {

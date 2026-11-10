@@ -1,7 +1,7 @@
 import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Response } from 'express';
 import { ZodError } from 'zod';
-import { ConfigError } from '../config';
-import { PayPalApiError, PayPalNetworkError } from '../paypal/types';
+import { ConfigError } from '../../config';
+import { PayPalApiError, PayPalNetworkError } from '../../paypal/types';
 
 /** An error with an HTTP status and a PayPal-style body: { name, message, details? }. */
 export class HttpError extends Error {
@@ -46,6 +46,15 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   }
   if (err instanceof PayPalNetworkError) {
     return res.status(504).json({ name: 'PAYPAL_UNREACHABLE', message: err.message });
+  }
+  // Vercel AI SDK errors are named AI_*; their message is the provider's (no key in it).
+  if (typeof err?.name === 'string' && err.name.startsWith('AI_')) {
+    console.error(`llm error ${err.name}: ${String(err.message).slice(0, 300)}`);
+    return res.status(502).json({ name: 'LLM_ERROR', message: String(err.message).slice(0, 500), details: { type: err.name } });
+  }
+  if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+    console.error(`timeout: ${String(err.message).slice(0, 200)}`);
+    return res.status(504).json({ name: 'LLM_TIMEOUT', message: 'The language model did not answer in time. Try again.' });
   }
   if (err?.code === '23505') {
     return res.status(409).json({ name: 'DUPLICATE', message: err.detail ?? 'Already exists.' });

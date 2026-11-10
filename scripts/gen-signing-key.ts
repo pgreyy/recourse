@@ -6,7 +6,7 @@
 import 'dotenv/config';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { generateSigningKey } from '../src/crypto/signing';
+import { generateSigningKey } from '../src/shared/crypto/signing';
 
 const key = generateSigningKey();
 const line = `RECOURSE_SIGNING_KEY=${key.privateKeyB64}`;

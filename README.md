@@ -1,10 +1,13 @@
 # Recourse
 
-The liability layer for PayPal agent checkout. When an AI agent buys the wrong thing, a ruling of
-agent fault, buyer remorse or merchant fault is settled on PayPal.
+The liability layer for agentic commerce, being built in phases. The goal: a buyer signs a mandate, an
+agent buys, every decision is recorded and anchored in the PayPal order, and when a purchase goes
+wrong Recourse works out who is responsible and settles it on PayPal, within limits the agent
+operator agreed to in advance.
 
 Status: Phase 0 (PayPal sandbox probes, results in [docs/phase0-findings.md](docs/phase0-findings.md)),
-Phase 1 (signed mandates, operators, agents) and Phase 2 (demo merchant, flight recorder).
+Phase 1 (authorization: signed mandates, operators, agents, liability agreements) and Phase 2
+(merchant and evidence: Store Sync style cart, catalog snapshots, flight recorder).
 
 ## Setup
 
@@ -30,21 +33,30 @@ Then import `postman/recourse.postman_collection.json` into Postman and follow
 
 ## API (Phases 1 and 2)
 
+One Express app, organised as modules: `authorization`, `transaction`, `evidence`, `accountability`,
+`settlement`, plus `paypal` (the one PayPal adapter, shared with the probes) and `shared`.
+
 | Method and path | What it does |
 |---|---|
-| `POST /mandates` | `{ buyer_email, text }`: the LLM turns plain English into a strict mandate, saved as `DRAFT` |
+| `POST /mandates` | `{ buyer_email, text }`: the LLM compiles plain English into a strict mandate, saved as `DRAFT`; anything that fails the schema is rejected (422) |
 | `POST /mandates/:id/approve` | PayPal Vault setup token for the buyer; returns `approve_url` |
-| `GET /mandates/:id/vault-return` | PayPal redirects here: stores `vault_id`, signs the mandate (Ed25519), sets `ACTIVE` |
-| `GET /mandates/:id` | The mandate with `signature_valid` computed live |
-| `POST /operators`, `POST /operators/:id/approve`, `GET /operators/:id` | Agent operator with a vaulted PayPal and a liability limit (default 200.00 USD) |
-| `POST /agents`, `GET /agents/:id` | A named, versioned agent belonging to an operator |
-| `POST /merchant-cart`, `PUT /merchant-cart/:id`, `GET /merchant-cart/:id` | Demo merchant cart shaped like PayPal Store Sync's Cart API |
+| `GET /mandates/:id/vault-return` | PayPal redirects here: stores the vault_id, signs the mandate (Ed25519), sets `ACTIVE` |
+| `GET /mandates/:id` | The mandate version with `signature_valid` computed live and the remaining budget |
+| `PUT /mandates/:id` | `{ text }` or `{ changes }`: creates the next version (signed again if the mandate was ACTIVE) |
+| `POST /mandates/:id/revoke` | Revokes the mandate |
+| `POST /operators`, `GET /operators/:id` | Agent operator and its onboarding state |
+| `POST /agents`, `POST /agents/:id/versions`, `GET /agents/:id` | Agents and their versions |
+| `POST /operators/:id/liability-agreement`, `GET ...`, `POST .../:version/accept`, `POST .../:version/revoke` | Versioned liability agreement (caps, covered agent versions, fault definition, appeal window); acceptance is signed |
+| `POST /operators/:id/approve` | Operator's PayPal vault link, only after an agreement is accepted; the saved method is linked to it |
+| `GET /operators/:id/exposure` | Caps, used and remaining |
+| `POST /merchant-cart`, `PUT /merchant-cart/:id`, `GET /merchant-cart/:id` | Stride & Co cart shaped like PayPal Store Sync's Cart API; each response carries a catalog snapshot |
 | `POST /merchant-cart/:id/checkout` | 501 until Phase 3 |
-| `POST /recorder/:case_ref/entries`, `GET /recorder/:case_ref`, `GET /recorder/:case_ref/verify` | Flight recorder hash chain |
-| `GET /.well-known/recourse-signing-key` | Public key that verifies mandate signatures |
+| `GET /catalog-snapshots/:id` | A stored catalog snapshot, re-hashed |
+| `POST /recorder/:case_ref/entries`, `GET /recorder/:case_ref`, `GET /recorder/:case_ref/verify` | Flight recorder: hash chain with signed checkpoints |
+| `GET /.well-known/recourse-signing-key` | Public key for mandates, agreement acceptances and checkpoints |
 
-Code: `src/` (API), `migrations/` (plain SQL, applied in name order), `src/paypal/` (PayPal helpers
-shared with the probes), `data/catalog.json` (demo catalog).
+Code: `src/<module>/` (API), `migrations/` (plain SQL, applied in name order by `npm run migrate`),
+`data/catalog.json` (demo catalog), `src/transaction/sizes.ts` (US/UK/EU size table).
 
 ## Probes (sandbox only)
 

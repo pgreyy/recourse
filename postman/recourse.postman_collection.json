@@ -1454,8 +1454,8 @@
       ]
     },
     {
-      "name": "Phase 1: Mandates and operators",
-      "description": "Recourse API. Needs DATABASE_URL, RECOURSE_SIGNING_KEY and the AI_* settings.",
+      "name": "Phase 1: Authorization",
+      "description": "Mandates, operators, agents, liability agreement. Needs DATABASE_URL, RECOURSE_SIGNING_KEY and the AI_* settings.",
       "item": [
         {
           "name": "1.0 Service",
@@ -1527,7 +1527,7 @@
         },
         {
           "name": "1.1 Mandates",
-          "description": "Create from plain English (LLM), approve with PayPal Vault, then check the signature.",
+          "description": "Compile plain English (LLM) into a strict mandate, approve with PayPal Vault, sign, edit into new versions.",
           "item": [
             {
               "name": "Create mandate",
@@ -1538,10 +1538,12 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
-                      "const m = pm.response.json(); pm.collectionVariables.set('mandate_id', m.id);",
-                      "pm.test('DRAFT', () => pm.expect(m.status).to.eql('DRAFT'));",
-                      "pm.test('size keeps its system', () => pm.expect(m.spec.attributes.find(a => a.name === 'size').unit_system).to.eql('US'));",
-                      "pm.test('max_total 120.00 USD', () => pm.expect(m.spec.max_total).to.eql({ value: '120.00', currency: 'USD' }));"
+                      "const m = pm.response.json();",
+                      "pm.collectionVariables.set('mandate_id', m.id);",
+                      "pm.test('DRAFT v1', () => { pm.expect(m.status).to.eql('DRAFT'); pm.expect(m.version).to.eql(1); });",
+                      "pm.test('size keeps US, men', () => { const s = m.spec.attributes.find(a => a.name === 'size'); pm.expect(s.unit_system).to.eql('US'); pm.expect(s.gender).to.eql('men'); });",
+                      "pm.test('aggregate budget 120.00 USD', () => pm.expect(m.spec.max_total).to.eql({ value: '120.00', currency: 'USD' }));",
+                      "pm.test('defaults', () => { pm.expect(m.spec.max_orders).to.eql(1); pm.expect(m.spec.allow_substitutions).to.eql(false); pm.expect(m.spec.allow_split_orders).to.eql(false); });"
                     ]
                   }
                 }
@@ -1586,7 +1588,7 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
-                      "pm.test('MANDATE_UNCLEAR', () => pm.expect(pm.response.json().name).to.eql('MANDATE_UNCLEAR'));"
+                      "pm.test('MANDATE_REJECTED', () => pm.expect(pm.response.json().name).to.eql('MANDATE_REJECTED'));"
                     ]
                   }
                 }
@@ -1623,7 +1625,7 @@
               }
             },
             {
-              "name": "Get mandate (signature_valid)",
+              "name": "Get mandate (signature_valid, remaining budget)",
               "event": [
                 {
                   "listen": "test",
@@ -1631,7 +1633,7 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-                      "const m = pm.response.json(); console.log(m.status, 'signature_valid', m.signature_valid, m.signature_check.reason);"
+                      "const m = pm.response.json(); console.log('v' + m.version, m.status, 'signature_valid', m.signature_valid, m.signature_check.reason, 'remaining', m.remaining_budget.remaining.value);"
                     ]
                   }
                 }
@@ -1655,7 +1657,7 @@
               }
             },
             {
-              "name": "Approve mandate (returns PayPal approve_url)",
+              "name": "Approve mandate (PayPal approve_url)",
               "event": [
                 {
                   "listen": "test",
@@ -1663,7 +1665,7 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-                      "const r = pm.response.json(); pm.collectionVariables.set('mandate_approve_url', r.approve_url); console.log('Open as the BUYER:', r.approve_url);"
+                      "console.log('Open as the BUYER:', pm.response.json().approve_url);"
                     ]
                   }
                 }
@@ -1685,11 +1687,94 @@
                     "approve"
                   ]
                 },
-                "description": "Open approve_url in a browser as the buyer sandbox account. PayPal redirects to /mandates/{id}/vault-return, which signs the mandate and makes it ACTIVE."
+                "description": "Open approve_url as the buyer sandbox account. PayPal redirects to /mandates/{id}/vault-return, which stores the vault_id, signs and sets ACTIVE."
               }
             },
             {
-              "name": "Vault return (PayPal calls this in the browser; manual retry only)",
+              "name": "Edit mandate (new signed version)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "const m = pm.response.json();",
+                      "pm.test('version went up', () => pm.expect(m.version).to.be.above(1));",
+                      "console.log('new version', m.version, m.status, 'signature_valid', m.signature_valid, 'previous_mandate_hash', m.previous_mandate_hash);",
+                      "pm.collectionVariables.set('previous_mandate_id', pm.collectionVariables.get('mandate_id'));",
+                      "pm.collectionVariables.set('mandate_id', m.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"changes\": {\n    \"max_total\": {\n      \"value\": \"110.00\",\n      \"currency\": \"USD\"\n    }\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/mandates/{{mandate_id}}",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "mandates",
+                    "{{mandate_id}}"
+                  ]
+                },
+                "description": "Send { \"text\": \"...\" } instead of changes to recompile with the LLM."
+              }
+            },
+            {
+              "name": "Get previous version (SUPERSEDED)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('SUPERSEDED', () => pm.expect(pm.response.json().status).to.eql('SUPERSEDED'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/mandates/{{previous_mandate_id}}",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "mandates",
+                    "{{previous_mandate_id}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Revoke mandate",
               "event": [
                 {
                   "listen": "test",
@@ -1702,20 +1787,34 @@
                 }
               ],
               "request": {
-                "method": "GET",
-                "header": [],
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "auth": {
                   "type": "noauth"
                 },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
                 "url": {
-                  "raw": "{{app_base_url}}/mandates/{{mandate_id}}/vault-return",
+                  "raw": "{{app_base_url}}/mandates/{{mandate_id}}/revoke",
                   "host": [
                     "{{app_base_url}}"
                   ],
                   "path": [
                     "mandates",
                     "{{mandate_id}}",
-                    "vault-return"
+                    "revoke"
                   ]
                 }
               }
@@ -1723,8 +1822,8 @@
           ]
         },
         {
-          "name": "1.2 Operators and agents",
-          "description": "Operator pre-authorizes liability payments (default limit 200.00 USD); agents belong to an operator.",
+          "name": "1.2 Operators, agents and the liability agreement",
+          "description": "Order matters: agent version, agreement, acceptance, then the operator PayPal approve link.",
           "item": [
             {
               "name": "Create operator",
@@ -1735,8 +1834,7 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
-                      "const o = pm.response.json(); pm.collectionVariables.set('operator_id', o.id);",
-                      "pm.test('default limit 200.00 USD', () => pm.expect(o.liability_limit).to.eql({ value: '200.00', currency: 'USD' }));"
+                      "pm.collectionVariables.set('operator_id', pm.response.json().id);"
                     ]
                   }
                 }
@@ -1773,15 +1871,15 @@
               }
             },
             {
-              "name": "Approve operator (returns PayPal approve_url)",
+              "name": "Approve operator BEFORE agreement (expect 409)",
               "event": [
                 {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-                      "console.log('Open as the OPERATOR:', pm.response.json().approve_url);"
+                      "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                      "pm.test('AGREEMENT_NOT_ACCEPTED', () => pm.expect(pm.response.json().name).to.eql('AGREEMENT_NOT_ACCEPTED'));"
                     ]
                   }
                 }
@@ -1801,38 +1899,6 @@
                     "operators",
                     "{{operator_id}}",
                     "approve"
-                  ]
-                }
-              }
-            },
-            {
-              "name": "Get operator",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-                      "const o = pm.response.json(); console.log(o.status, o.operator_vault_id);"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [],
-                "auth": {
-                  "type": "noauth"
-                },
-                "url": {
-                  "raw": "{{app_base_url}}/operators/{{operator_id}}",
-                  "host": [
-                    "{{app_base_url}}"
-                  ],
-                  "path": [
-                    "operators",
-                    "{{operator_id}}"
                   ]
                 }
               }
@@ -1864,7 +1930,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"operator_id\": \"{{operator_id}}\",\n  \"name\": \"ShopBot\",\n  \"version\": \"1.0.0\"\n}",
+                  "raw": "{\n  \"operator_id\": \"{{operator_id}}\",\n  \"name\": \"ShopBot\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1878,6 +1944,53 @@
                   ],
                   "path": [
                     "agents"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Add agent version",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "pm.collectionVariables.set('agent_version_id', pm.response.json().id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"version\": \"1.0.0\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/agents/{{agent_id}}/versions",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "agents",
+                    "{{agent_id}}",
+                    "versions"
                   ]
                 }
               }
@@ -1912,21 +2025,9 @@
                   ]
                 }
               }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Phase 2: Demo merchant and flight recorder",
-      "description": "Recourse API. Run npm run migrate and npm run seed first.",
-      "item": [
-        {
-          "name": "2.1 Merchant cart (Stride & Co)",
-          "description": "Shaped like PayPal Store Sync Cart API. Business problems come back as validation_issues on a 2xx cart. Run npm run seed first.",
-          "item": [
+            },
             {
-              "name": "Create cart: Pegasus 41 US 10 (out of stock)",
+              "name": "Create liability agreement (defaults: 150 / 500 USD, 72 h)",
               "event": [
                 {
                   "listen": "test",
@@ -1934,13 +2035,9 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
-                      "const c = pm.response.json(); pm.collectionVariables.set('cart_id', c.id);",
-                      "const i = c.validation_issues[0];",
-                      "pm.test('INCOMPLETE', () => pm.expect(c.status).to.eql('INCOMPLETE'));",
-                      "pm.test('ITEM_OUT_OF_STOCK', () => pm.expect(i.context.specific_issue).to.eql('ITEM_OUT_OF_STOCK'));",
-                      "pm.test('substitute is the UK 10', () => pm.expect(i.suggested_substitute.variant_id).to.eql('nike-pegasus-41-uk-10'));",
-                      "pm.test('message only says size 10', () => pm.expect(i.message).to.not.match(/US|UK/));",
-                      "console.log(i.message);"
+                      "const a = pm.response.json();",
+                      "pm.collectionVariables.set('agreement_version', a.version);",
+                      "pm.test('DRAFT, caps', () => { pm.expect(a.status).to.eql('DRAFT'); pm.expect(a.terms.per_incident_cap.value).to.eql('150.00'); pm.expect(a.terms.aggregate_cap.value).to.eql('500.00'); });"
                     ]
                   }
                 }
@@ -1958,7 +2055,294 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"variant_id\": \"nike-pegasus-41-us-10\",\n      \"quantity\": 1\n    }\n  ]\n}",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/operators/{{operator_id}}/liability-agreement",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "operators",
+                    "{{operator_id}}",
+                    "liability-agreement"
+                  ]
+                },
+                "description": "Optional body: covered_agent_version_ids, categories, per_incident_cap, aggregate_cap, appeal_window_hours."
+              }
+            },
+            {
+              "name": "Approve operator while agreement is DRAFT (expect 409)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 409', () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/operators/{{operator_id}}/approve",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "operators",
+                    "{{operator_id}}",
+                    "approve"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Accept liability agreement",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('ACCEPTED, signature valid', () => { const a = pm.response.json(); pm.expect(a.status).to.eql('ACCEPTED'); pm.expect(a.acceptance.signature_valid).to.eql(true); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"accepted_by\": {\n    \"name\": \"Ops Lead\",\n    \"email\": \"{{operator_email}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/operators/{{operator_id}}/liability-agreement/{{agreement_version}}/accept",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "operators",
+                    "{{operator_id}}",
+                    "liability-agreement",
+                    "{{agreement_version}}",
+                    "accept"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get liability agreement",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/operators/{{operator_id}}/liability-agreement",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "operators",
+                    "{{operator_id}}",
+                    "liability-agreement"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Approve operator (PayPal approve_url, linked to agreement)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "console.log('Open as the OPERATOR:', pm.response.json().approve_url);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/operators/{{operator_id}}/approve",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "operators",
+                    "{{operator_id}}",
+                    "approve"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Exposure",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const e = pm.response.json(); console.log('caps', e.per_incident_cap.value, e.aggregate_cap.value, 'used', e.used.value, 'remaining', e.remaining.value);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/operators/{{operator_id}}/exposure",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "operators",
+                    "{{operator_id}}",
+                    "exposure"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get operator (onboarding)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/operators/{{operator_id}}",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "operators",
+                    "{{operator_id}}"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Phase 2: Merchant and evidence",
+      "description": "Stride & Co cart, catalog snapshots, flight recorder. Run npm run migrate and npm run seed first.",
+      "item": [
+        {
+          "name": "2.1 Merchant cart (Stride & Co)",
+          "description": "Shaped like PayPal Store Sync Cart API. Every response carries a catalog snapshot whose sha256 goes into the recorder. Run npm run seed first.",
+          "item": [
+            {
+              "name": "Create cart: Pegasus 41 US 10 (out of stock)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('case_ref', 'CASE-' + Date.now());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "const c = pm.response.json(); const i = c.validation_issues[0];",
+                      "pm.collectionVariables.set('cart_id', c.id);",
+                      "pm.collectionVariables.set('snapshot_id', c.catalog_snapshot.id);",
+                      "pm.test('INCOMPLETE', () => pm.expect(c.status).to.eql('INCOMPLETE'));",
+                      "pm.test('ITEM_OUT_OF_STOCK', () => pm.expect(i.context.specific_issue).to.eql('ITEM_OUT_OF_STOCK'));",
+                      "pm.test('substitute is the missing-unit variant', () => { pm.expect(i.suggested_substitute.variant_id).to.eql('nike-pegasus-41-10'); pm.expect(i.suggested_substitute.attributes.unit_system).to.eql(null); });",
+                      "pm.test('described only as size 10', () => { pm.expect(i.suggested_substitute.description).to.eql('size 10'); pm.expect(i.message).to.not.match(/US|UK/); });",
+                      "pm.test('snapshot with sha256', () => pm.expect(c.catalog_snapshot.sha256).to.match(/^[0-9a-f]{64}$/));",
+                      "console.log(i.message, '| snapshot', c.catalog_snapshot.sha256, '| recorder seq', c.recorder.seq);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    {\n      \"variant_id\": \"nike-pegasus-41-us-10\",\n      \"quantity\": 1\n    }\n  ],\n  \"case_ref\": \"{{case_ref}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2008,7 +2392,7 @@
               }
             },
             {
-              "name": "Update cart: take the substitute (UK 10)",
+              "name": "Update cart: compliant alternative (Gel-Nimbus US 10)",
               "event": [
                 {
                   "listen": "test",
@@ -2016,7 +2400,7 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-                      "pm.test('READY', () => pm.expect(pm.response.json().status).to.eql('READY'));"
+                      "pm.test('READY 115.00', () => { const c = pm.response.json(); pm.expect(c.status).to.eql('READY'); pm.expect(c.totals.total.value).to.eql('115.00'); });"
                     ]
                   }
                 }
@@ -2034,7 +2418,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"variant_id\": \"nike-pegasus-41-uk-10\",\n      \"quantity\": 1\n    }\n  ]\n}",
+                  "raw": "{\n  \"items\": [\n    {\n      \"variant_id\": \"asics-gel-nimbus-27-us-10\",\n      \"quantity\": 1\n    }\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2100,46 +2484,33 @@
               }
             },
             {
-              "name": "Create cart: unknown variant (DATA_ERROR, still 201)",
+              "name": "Get catalog snapshot (re-hashed)",
               "event": [
                 {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
-                      "pm.test('DATA_ERROR', () => pm.expect(pm.response.json().validation_issues[0].code).to.eql('DATA_ERROR'));"
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('sha256 still matches', () => pm.expect(pm.response.json().valid).to.eql(true));"
                     ]
                   }
                 }
               ],
               "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
+                "method": "GET",
+                "header": [],
                 "auth": {
                   "type": "noauth"
                 },
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"variant_id\": \"does-not-exist\",\n      \"quantity\": 1\n    }\n  ]\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
                 "url": {
-                  "raw": "{{app_base_url}}/merchant-cart",
+                  "raw": "{{app_base_url}}/catalog-snapshots/{{snapshot_id}}",
                   "host": [
                     "{{app_base_url}}"
                   ],
                   "path": [
-                    "merchant-cart"
+                    "catalog-snapshots",
+                    "{{snapshot_id}}"
                   ]
                 }
               }
@@ -2148,66 +2519,10 @@
         },
         {
           "name": "2.2 Flight recorder",
-          "description": "Hash chain per case_ref. The first request sets a fresh case_ref.",
+          "description": "Hash chain per case_ref with a signed checkpoint after every entry. Uses the case_ref set by the cart request.",
           "item": [
             {
-              "name": "Append entry 1 (new case_ref)",
-              "event": [
-                {
-                  "listen": "prerequest",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.collectionVariables.set('case_ref', 'CASE-' + Date.now());"
-                    ]
-                  }
-                },
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
-                      "pm.test('seq 1', () => pm.expect(pm.response.json().seq).to.eql(1));"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "auth": {
-                  "type": "noauth"
-                },
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"kind\": \"mandate.read\",\n  \"payload\": {\n    \"mandate_id\": \"{{mandate_id}}\",\n    \"note\": \"agent read the mandate\"\n  }\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{app_base_url}}/recorder/{{case_ref}}/entries",
-                  "host": [
-                    "{{app_base_url}}"
-                  ],
-                  "path": [
-                    "recorder",
-                    "{{case_ref}}",
-                    "entries"
-                  ]
-                }
-              }
-            },
-            {
-              "name": "Append entry 2",
+              "name": "Append entry",
               "event": [
                 {
                   "listen": "test",
@@ -2232,7 +2547,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"kind\": \"merchant.cart.created\",\n  \"payload\": {\n    \"cart_id\": \"{{cart_id}}\",\n    \"variant_id\": \"nike-pegasus-41-us-10\",\n    \"status\": \"INCOMPLETE\"\n  }\n}",
+                  "raw": "{\n  \"kind\": \"agent.note\",\n  \"payload\": {\n    \"mandate_id\": \"{{mandate_id}}\",\n    \"note\": \"agent compared the substitute with the mandate\"\n  }\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2253,53 +2568,7 @@
               }
             },
             {
-              "name": "Append entry 3",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "auth": {
-                  "type": "noauth"
-                },
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"kind\": \"agent.decision\",\n  \"payload\": {\n    \"accepted_substitute\": \"nike-pegasus-41-uk-10\",\n    \"reason\": \"merchant said size 10 is available\"\n  }\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{app_base_url}}/recorder/{{case_ref}}/entries",
-                  "host": [
-                    "{{app_base_url}}"
-                  ],
-                  "path": [
-                    "recorder",
-                    "{{case_ref}}",
-                    "entries"
-                  ]
-                }
-              }
-            },
-            {
-              "name": "List entries",
+              "name": "List entries and checkpoints",
               "event": [
                 {
                   "listen": "test",
@@ -2338,7 +2607,7 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-                      "const v = pm.response.json(); console.log('valid', v.valid, 'first_broken_seq', v.first_broken_seq);"
+                      "const v = pm.response.json(); console.log('valid', v.valid, 'first_problem', JSON.stringify(v.first_problem), 'checkpoints', JSON.stringify(v.checkpoints));"
                     ]
                   }
                 }
@@ -2379,7 +2648,7 @@
       "type": "string"
     },
     {
-      "key": "mandate_approve_url",
+      "key": "previous_mandate_id",
       "value": "",
       "type": "string"
     },
@@ -2394,7 +2663,22 @@
       "type": "string"
     },
     {
+      "key": "agent_version_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "agreement_version",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "cart_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "snapshot_id",
       "value": "",
       "type": "string"
     },

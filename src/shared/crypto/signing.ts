@@ -1,6 +1,6 @@
 import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from 'node:crypto';
-import { config, ConfigError } from '../config';
-import { sha256Hex } from './canonical';
+import { config, ConfigError } from '../../config';
+import { canonicalize, sha256Hex } from './canonical';
 
 /**
  * Recourse's Ed25519 signing key. RECOURSE_SIGNING_KEY holds the private key as base64 of its
@@ -53,4 +53,33 @@ export function generateSigningKey(): { privateKeyB64: string; keyId: string; pu
     keyId: keyIdFor(publicKey),
     publicJwk: publicKey.export({ format: 'jwk' }),
   };
+}
+
+/**
+ * Sign a JSON document: canonical JSON -> sha256 hex + Ed25519 signature (base64url) with the
+ * current key. Mandates, liability-agreement acceptances and recorder checkpoints all use this.
+ */
+export function signDocument(doc: unknown): { canonical: string; hash: string; signature: string; keyId: string } {
+  const canonical = canonicalize(doc);
+  const { signature, keyId } = signBytes(canonical);
+  return { canonical, hash: sha256Hex(canonical), signature, keyId };
+}
+
+export type DocumentCheck = {
+  valid: boolean;
+  reason: 'OK' | 'NOT_SIGNED' | 'HASH_MISMATCH' | 'BAD_SIGNATURE' | 'UNKNOWN_KEY';
+  computed_hash: string | null;
+};
+
+/** Recompute the hash of `doc`, compare with the stored hash, and verify the stored signature. */
+export function checkDocument(doc: unknown, stored: { hash?: string | null; signature?: string | null; keyId?: string | null }): DocumentCheck {
+  if (!stored.signature || !stored.keyId) return { valid: false, reason: 'NOT_SIGNED', computed_hash: null };
+  const canonical = canonicalize(doc);
+  const computed = sha256Hex(canonical);
+  if (loadSigner().keyId !== stored.keyId) return { valid: false, reason: 'UNKNOWN_KEY', computed_hash: computed };
+  if (stored.hash !== undefined && stored.hash !== null && stored.hash.trim() !== computed) {
+    return { valid: false, reason: 'HASH_MISMATCH', computed_hash: computed };
+  }
+  if (!verifyBytes(canonical, stored.signature)) return { valid: false, reason: 'BAD_SIGNATURE', computed_hash: computed };
+  return { valid: true, reason: 'OK', computed_hash: computed };
 }

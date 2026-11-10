@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "migrate": "tsx src/db/migrate.ts",
-    "seed": "tsx src/merchant/seed.ts",
+    "migrate": "tsx src/shared/db/migrate.ts",
+    "seed": "tsx src/transaction/seed.ts",
     "keygen": "tsx scripts/gen-signing-key.ts",
     "typecheck": "tsc",
     "webhook": "tsx scripts/probes/05-webhook-server.ts",
