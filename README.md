@@ -55,7 +55,8 @@ settlement.
 1. **The operator's responsibility, agreed in advance, capped, and recovered on PayPal.** The operator accepts a
    versioned liability agreement (for the demo: 400.00 USD per incident, 1,000.00 USD in total, a 72 hour appeal window)
    and saves a PayPal payment method under it. After a human-approved decision, and once the operator accepts (or its
-   appeal window closes), Recourse refunds the buyer and charges the operator's saved PayPal within the signed cap. This
+   appeal window closes), Recourse refunds the buyer and charges the operator's saved PayPal within the signed cap,
+   enough to cover the refund and PayPal's fees on both payments, so the merchant nets 0.00. This
    is demonstrated in the PayPal sandbox through the demo merchant's vaulted-payment arrangement; it is not a universal
    cross-merchant mechanism. Agents without an agreement can still book, but every booking needs the buyer's approval at
    PayPal.
@@ -152,13 +153,17 @@ Every id below is a PayPal sandbox id from a run on the hosted demo on 2026-11-1
   a person approved the decision and the operator accepted it: buyer refund `6M826989RN0922432` (340.00 USD, confirmed
   by a re-read from PayPal); operator charged order `71R16486NJ703452D`, capture `7EW87576HA7150919`, 352.36 USD (the
   refund plus the 12.36 USD PayPal fee the refund did not return), confirmed by webhook. Who paid what: buyer
-  refunded 340.00, merchant net 0.00 (PayPal's 12.79 USD fee on the recovery charge is shown as not recovered),
-  operator charged 352.36, 647.64 USD left of its 1,000.00 USD cap. v1.3 then moved to step-up ("recent confirmed agent
+  refunded 340.00, operator charged 352.36 (647.64 USD left of its 1,000.00 USD cap), merchant short by 12.79: PayPal's
+  fee on the operator charge, which that charge did not yet cover. v1.3 then moved to step-up ("recent confirmed agent
   fault").
-- **A failed attempt, recorded as it happened.** The first live v1.3 run (agent run `2aa9bb55`) took the same trap but
-  mistyped the cart id at checkout, so nothing was booked or charged; the run above was the second attempt.
-- **Rehearsals.** Dry runs (nothing charged) on gpt-5-nano on 2026-11-10: v1.3 took the Flexible Saver suggestion in
-  3 of 3 runs; v2.0 refused it and booked Hotel Ribeira Alta's refundable rate in 1 of 1.
+- **Scenario B, the careful agent.** Wayfare Booker v2.0, same instructions: it was offered the same Flexible Saver
+  suggestion, refused it and booked Hotel Ribeira Alta's refundable rate. The firewall passed all 15 checks: PayPal
+  order `5C182111K0149813U`, capture `95N79176XL8035127`, 380.00 USD, booking confirmation TWS-E46CF8; the receipt says
+  Compliant and no case was opened.
+- **The operator charge now covers its own PayPal fee.** After scenario A, the charge was changed to the smallest
+  amount that leaves the merchant exactly 0.00 after PayPal's fee on the refund and on the charge, within the caps.
+  PayPal's rate is worked out from its own fee on the booking capture (12.36 on 340.00 gives 3.49% + 0.49, which also
+  reproduces the 12.79 on 352.36). For scenario A that would have been 365.61 USD. Not yet run on PayPal.
 - **Scorecard: an internal, labelled 34-case evaluation set** (24 retail, 10 travel), run through the same pipeline as
   live cases. It is evidence of behaviour on known cases, not production accuracy. gpt-5-mini, prompt hash
   `0da0a61218a5`, scorecard run `628d51ab` on 2026-11-10:

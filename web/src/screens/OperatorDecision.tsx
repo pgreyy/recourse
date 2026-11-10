@@ -161,7 +161,7 @@ export function OperatorDecision() {
                   Buyer refunded <strong className="mono">{pv.buyer_refund} {pv.currency}</strong>.
                 </p>
                 <p>
-                  {v.data.operator?.name ?? 'The operator'} charged <strong className="mono">{pv.operator_charge_from} {pv.currency}</strong> plus any PayPal fee the refund does not return
+                  {v.data.operator?.name ?? 'The operator'} charged <strong className="mono">{pv.operator_charge_from} {pv.currency}</strong> plus the PayPal fees on the refund and on this charge, so the merchant nets 0.00
                   {pv.operator_charge_limit ? `, never more than ${pv.operator_charge_limit} ${pv.currency}` : ''}.
                 </p>
                 <p className="small muted">Exact figures appear here once PayPal confirms the refund and the charge.</p>

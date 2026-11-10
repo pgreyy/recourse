@@ -3,6 +3,7 @@ import { instructionWords } from '../shared/words';
 import { agentCoverage } from '../authorization/coverage';
 import { appendEntry } from '../evidence/recorder';
 
+import { feeCents, feeModelFrom, grossUp, rateWords } from './fees';
 import { captureOrder, createVaultOrder, firstCapture } from '../paypal/orders';
 import { createAndSendInvoice, disputeAction, findLink, getCapture, getDispute, refundCapture } from '../paypal/settlement-api';
 import type { PPResponse } from '../paypal/types';
@@ -217,17 +218,22 @@ async function recoverFromOperator(
   }
   const refunded = cents(refund?.amount?.value ?? order.total_value);
   const fee = unreturnedFeeCents(capture, refund);
+  // Gross-up: the charge also covers PayPal's fee on the charge itself, so the merchant nets exactly 0.00.
+  const fees = feeModelFrom(capture);
+  const full = grossUp(refunded + fee, fees);
   const used = await usedUnderAgreement(agreement.id);
   const remaining = Math.max(0, cents(agreement.aggregate_cap) - used.usedCents);
   const perIncident = cents(agreement.per_incident_cap);
-  const amountCents = Math.min(refunded + fee, perIncident, remaining);
-  check('cap.per_incident', refunded + fee <= perIncident, `refunded ${money(refunded, currency).value} + unreturned PayPal fee ${money(fee, currency).value} = ${money(refunded + fee, currency).value}; per-incident cap ${money(perIncident, currency).value}`);
+  const amountCents = Math.min(full, perIncident, remaining);
+  const chargeFee = feeCents(amountCents, fees);
+  const m$ = (c: number) => money(c, currency).value;
+  check('cap.per_incident', full <= perIncident, `refund ${m$(refunded)} + fee PayPal kept on the refund ${m$(fee)} + fee on this charge ${m$(feeCents(full, fees))} = ${m$(full)}; per-incident cap ${m$(perIncident)}`);
   if (!check('cap.aggregate', amountCents > 0, `aggregate cap ${agreement.aggregate_cap}, used ${money(used.usedCents, currency).value}, remaining ${money(remaining, currency).value}`)) {
     return done('FAILED', 'aggregate cap exhausted');
   }
   const amount = money(amountCents, currency).value;
   const charge = await runAction(
-    ob, caseRef, 'CHARGE_OPERATOR', { value: amount, currency }, { vault_id: token.vault_id, custom_id: ruling.id, invoice_id: caseRef, breakdown: { refunded: money(refunded, currency).value, unreturned_fee: money(fee, currency).value } },
+    ob, caseRef, 'CHARGE_OPERATOR', { value: amount, currency }, { vault_id: token.vault_id, custom_id: ruling.id, invoice_id: caseRef, breakdown: { refunded: m$(refunded), unreturned_fee: m$(fee), fee_on_charge: m$(chargeFee), full_recovery: m$(full), capped: amountCents < full, fee_rate: rateWords(fees), fee_source: fees.source } },
     async (key) => {
       const created = await createVaultOrder({ vaultId: token.vault_id, source: 'paypal', amount, currency, customId: ruling.id, invoiceId: caseRef, description: `Recourse ruling ${ruling.id} (${caseRef}): agent fault liability` }, key);
       if (created.status < 300 && created.body?.status !== 'COMPLETED') {
@@ -353,7 +359,8 @@ export async function whoPaid(ob: ObligationRow, actions: Array<Record<string, a
   // PayPal's fee on the recovery charge itself, from PayPal's capture record (kept by PayPal, not recovered).
   const capture = charge?.response?.purchase_units?.[0]?.payments?.captures?.[0];
   const recoveryFee = capture?.seller_receivable_breakdown?.paypal_fee?.value ? cents(capture.seller_receivable_breakdown.paypal_fee.value) : null;
-  const merchantNet = charged - refunded - unreturnedFee;
+  // The merchant's net counts PayPal's fee on the recovery charge too (the charge is grossed up to cover it).
+  const merchantNet = charged - refunded - unreturnedFee - (recoveryFee ?? 0);
   let agreement = null;
   if (ob.liability_agreement_id) {
     const la = (await db().query('SELECT version, per_incident_cap::text, aggregate_cap::text FROM liability_agreements WHERE id = $1', [ob.liability_agreement_id])).rows[0];
@@ -369,6 +376,7 @@ export async function whoPaid(ob: ObligationRow, actions: Array<Record<string, a
       received_from_operator: fmt(charged),
       net: fmt(merchantNet),
       made_whole: merchantNet >= 0,
+      calculation: charge?.request?.breakdown?.fee_on_charge ? charge.request.breakdown : null,
       paypal_fee_on_recovery: recoveryFee === null ? null : fmt(recoveryFee),
     },
     operator: { charged: fmt(charged), capture_id: charge?.paypal_ids?.capture_id ?? null, agreement },
@@ -415,6 +423,8 @@ export async function settlementView(obligationId: string, live = false) {
       debug_id: a.debug_id,
       error: a.error,
       idempotency_key: a.idempotency_key.trim(),
+      // How an operator charge was worked out (refund, fee kept on the refund, fee on the charge, rate, cap).
+      calculation: a.action === 'CHARGE_OPERATOR' && a.request?.breakdown?.fee_on_charge ? a.request.breakdown : null,
       created_at: a.created_at,
       completed_at: a.completed_at,
       confirmed_at: a.confirmed_at,

@@ -112,8 +112,8 @@ consoleRoutes.get(
         ? { version: la.version, per_incident_cap: la.per_incident_cap, aggregate_cap: la.aggregate_cap, currency: la.currency.trim(), appeal_window_hours: la.appeal_window_hours, used: Number(used).toFixed(2), cap_remaining: (Number(la.aggregate_cap) - Number(used)).toFixed(2) }
         : null,
       appeal,
-      // Before settlement: the buyer is refunded the total; the operator is charged that plus any PayPal fee the refund
-      // does not return, never more than the per-incident cap or what is left of the total cap.
+      // Before settlement: the buyer is refunded the total; the operator is charged that plus the PayPal fees on the
+      // refund and on the charge, never more than the per-incident cap or what is left of the total cap.
       preview: {
         buyer_refund: total.toFixed(2),
         operator_charge_from: total.toFixed(2),

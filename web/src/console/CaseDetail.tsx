@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, ErrorNote, Id, Modal, money, navigate, SettlementStatus, short, Status, useLoad, useLocation, Verdict, when, Who, maskEmail, plural } from '../lib';
 import { Timeline, type Entry } from '../timeline';
-import { WhoPaid } from './WhoPaid';
+import { CalculationNote, WhoPaid } from './WhoPaid';
 
 type Detail = {
   case: any;
@@ -535,6 +535,11 @@ function SettlementPanel({ obligations, busy, act }: { obligations: any[]; busy:
                         HTTP {x.http_status ?? '—'}
                         {x.debug_id ? `, debug ${x.debug_id}` : ''}
                       </div>
+                      {x.calculation && (
+                        <div className="small" style={{ maxWidth: 360, marginTop: 4 }}>
+                          <CalculationNote c={x.calculation} ccy={x.amount?.currency ?? ''} />
+                        </div>
+                      )}
                     </td>
                     <td>
                       <div className="stack" style={{ gap: 3 }}>

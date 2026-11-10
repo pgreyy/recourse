@@ -123,6 +123,9 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
           const brands = p.input?.brands?.length ? ` for ${p.input.brands.join(' or ')}` : '';
           const max = p.input?.max_price ? ` up to ${p.input.max_price}` : '';
           out.push(row(`Agent searched the ${merchantName} catalog${brands}${max}`, why));
+        } else if ((p.tool === 'create_cart' || p.tool === 'update_cart') && !p.input?.items?.length) {
+          // The call came without a rate or listing (an argument error); its result row says what was wrong.
+          out.push(row(p.tool === 'create_cart' ? 'Agent tried to create a cart without choosing a rate' : 'Agent tried to change the cart without choosing a rate', why));
         } else if (p.tool === 'create_cart') {
           out.push(row(`Agent asked for ${items(p.input?.items)}`, why));
         } else if (p.tool === 'update_cart') {
