@@ -16,10 +16,10 @@ export function Home() {
           <p>A buyer signs a mandate, an agent buys, every decision is recorded and anchored in the PayPal order. When a purchase goes wrong, Recourse works out who is responsible and settles it on PayPal.</p>
         </div>
       </div>
-      <ol className="grid2" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+      <ol className="ledger-steps">
         {STEPS.map((s) => (
-          <li key={s.to} className="card card-pad stack" style={{ gap: 8 }}>
-            <span className="mono muted">Step {s.n}</span>
+          <li key={s.to}>
+            <span className="n">Step {s.n}</span>
             <h2>
               <Link to={s.to}>{s.title}</Link>
             </h2>

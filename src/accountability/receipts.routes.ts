@@ -24,18 +24,18 @@ function outcome(r: NonNullable<ReceiptView>): string {
   const f = r.refund as { value: string; currency: string; confirmation: string; confirmed_at: string | null; completed_at: string | null; refund_id: string | null } | null;
   const ru = r.ruling as { verdict: string; status: string; approved_at: string; case_status: string; source: string } | null;
   if (f && f.confirmation === 'confirmed') {
-    return `<div class="card outcome ok" role="status"><h2>Outcome</h2><p><strong>Resolved: refunded ${esc(f.value)} ${esc(f.currency.trim())} on ${esc(day(f.confirmed_at ?? f.completed_at!))}.</strong></p><p class="muted">Confirmed by PayPal${f.refund_id ? `, refund ${esc(f.refund_id)}` : ''}.${ru?.verdict === 'AGENT_FAULT' ? " The agent's operator covers the cost." : ''} You do not need to file a dispute.</p></div>`;
+    return `<section class="sec outcome ok" role="status"><h2>Outcome</h2><p><strong>Resolved: refunded ${esc(f.value)} ${esc(f.currency.trim())} on ${esc(day(f.confirmed_at ?? f.completed_at!))}.</strong></p><p class="muted">Confirmed by PayPal${f.refund_id ? `, refund ${esc(f.refund_id)}` : ''}.${ru?.verdict === 'AGENT_FAULT' ? " The agent's operator covers the cost." : ''} You do not need to file a dispute.</p></section>`;
   }
   if (f) {
-    return `<div class="card outcome" role="status"><h2>Outcome</h2><p><strong>Refund of ${esc(f.value)} ${esc(f.currency.trim())} issued on ${esc(day(f.completed_at!))}.</strong></p><p class="muted">Waiting for PayPal to confirm it.</p></div>`;
+    return `<section class="sec outcome" role="status"><h2>Outcome</h2><p><strong>Refund of ${esc(f.value)} ${esc(f.currency.trim())} issued on ${esc(day(f.completed_at!))}.</strong></p><p class="muted">Waiting for PayPal to confirm it.</p></section>`;
   }
   if (!ru) return '';
   const v = VERDICT_WORDS[ru.verdict] ?? ru.verdict.toLowerCase().replace(/_/g, ' ');
   if (ru.case_status === 'CLOSED') {
-    return `<div class="card outcome" role="status"><h2>Outcome</h2><p><strong>Resolved on ${esc(day(ru.approved_at))}: no refund.</strong></p><p class="muted">The ruling found ${esc(v)}.</p></div>`;
+    return `<section class="sec outcome" role="status"><h2>Outcome</h2><p><strong>Resolved on ${esc(day(ru.approved_at))}: no refund.</strong></p><p class="muted">The ruling found ${esc(v)}.</p></section>`;
   }
   const where = ru.source === 'PAYPAL_DISPUTE' ? ' Your PayPal dispute is still under review at PayPal, which makes the final decision.' : '';
-  return `<div class="card outcome" role="status"><h2>Outcome</h2><p><strong>Ruling on ${esc(day(ru.approved_at))}: ${esc(v)}.</strong></p><p class="muted">Not resolved yet.${where}</p></div>`;
+  return `<section class="sec outcome" role="status"><h2>Outcome</h2><p><strong>Ruling on ${esc(day(ru.approved_at))}: ${esc(v)}.</strong></p><p class="muted">Not resolved yet.${where}</p></section>`;
 }
 
 const CASE_STATUS: Record<string, string> = { OPEN: 'open', ASSESSED: 'being reviewed', RULING_APPROVED: 'decided', APPEALED: 'under appeal', CLOSED: 'closed' };
@@ -52,52 +52,55 @@ function page(r: NonNullable<ReceiptView>, token: string, notice?: string): stri
   const reported = r.cases.length > 0;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Purchase receipt</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpolygon points='16.00,0.60 17.84,2.02 19.99,1.12 21.40,2.97 23.70,2.66 24.58,4.81 26.89,5.11 27.19,7.42 29.34,8.30 29.03,10.60 30.88,12.01 29.98,14.16 31.40,16.00 29.98,17.84 30.88,19.99 29.03,21.40 29.34,23.70 27.19,24.58 26.89,26.89 24.58,27.19 23.70,29.34 21.40,29.03 19.99,30.88 17.84,29.98 16.00,31.40 14.16,29.98 12.01,30.88 10.60,29.03 8.30,29.34 7.42,27.19 5.11,26.89 4.81,24.58 2.66,23.70 2.97,21.40 1.12,19.99 2.02,17.84 0.60,16.00 2.02,14.16 1.12,12.01 2.97,10.60 2.66,8.30 4.81,7.42 5.11,5.11 7.42,4.81 8.30,2.66 10.60,2.97 12.01,1.12 14.16,2.02' fill='%230b4f4a' stroke='%230b4f4a' stroke-width='.8' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='16' r='11.6' fill='none' stroke='%23f6f3ec' stroke-width='1.2' stroke-opacity='.6'/%3E%3Cpath d='M11.6 13.3h6.5a3.85 3.85 0 0 1 0 7.7h-5.1' fill='none' stroke='%23f6f3ec' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M14.6 10.3 11.6 13.3l3 3' fill='none' stroke='%23f6f3ec' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,500..600,50&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root{--paper:#f5f4f0;--card:#fff;--ink:#14201f;--ink2:#44514f;--muted:#5f6b68;--line:#e0ddd5;--line2:#c7c2b6;--accent:#0b4f4a;--accent2:#083d39;--soft:#e2edeb;
---ok:#1a5c35;--okbg:#e3f0e7;--okl:#9cc7aa;--warn:#6f4500;--warnbg:#fbf0d6;--warnl:#e1bf72;--bad:#94231a;--badbg:#f8e4e0;--badl:#df9f95}
-*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
-header{background:var(--ink);color:#fff;height:52px;display:flex;align-items:center;gap:10px;padding:0 16px;font:600 16px 'IBM Plex Serif',Georgia,serif}
-header svg{width:22px;height:22px}header .sb{margin-left:auto;font:400 12px 'IBM Plex Sans',sans-serif;color:#d6dcdb;border:1px solid #4d5c5a;border-radius:99px;padding:2px 8px}
-main{max-width:600px;margin:0 auto;padding:20px 16px 40px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px 18px;margin:0 0 12px}
-h1{font:600 24px/1.25 'IBM Plex Serif',Georgia,serif;margin:4px 0 16px}
-h2{font-size:12.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);margin:0 0 8px}
-.badge{display:inline-flex;align-items:center;gap:6px;font:600 12px/20px 'IBM Plex Sans',sans-serif;letter-spacing:.03em;text-transform:uppercase;padding:1px 9px;border-radius:4px;border:1px solid}
-.badge::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
-.badge.ok{color:var(--ok);background:var(--okbg);border-color:var(--okl)}.badge.warn{color:var(--warn);background:var(--warnbg);border-color:var(--warnl)}.badge.bad{color:var(--bad);background:var(--badbg);border-color:var(--badl)}
-p.ok{color:var(--ok)}p.warn,li.warn{color:var(--warn)}
-.quote{font:600 17px/1.5 'IBM Plex Serif',Georgia,serif;border-left:3px solid var(--line2);padding-left:12px;margin:0 0 8px}
+:root{--paper:#f6f3ec;--sheet:#fffdf8;--ink:#161a19;--ink2:#3d4542;--muted:#59615e;--line:#e2dccf;--line2:#c4bba8;--accent:#0b4f4a;--accent2:#083d39;--soft:#e2ece8;
+--ok:#0d4d38;--okbg:#e4efe8;--warn:#8a3414;--warnbg:#fbefe6;--bad:#93260f;--badbg:#f7e2da;--signal:#a3361b}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+header{display:flex;align-items:center;gap:10px;max-width:640px;margin:0 auto;padding:16px 16px 0}
+header .wm{font:600 21px/1 'Fraunces',Georgia,serif;letter-spacing:-.01em}
+header .sb{margin-left:auto;display:inline-flex;align-items:center;gap:8px;font:500 11.5px 'IBM Plex Sans',sans-serif;color:var(--ink2);border:1px solid var(--line2);border-radius:99px;padding:2px 10px}
+header .sb::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--accent)}
+main{max-width:640px;margin:0 auto;padding:16px 16px 48px}
+h1{font:600 28px/1.2 'Fraunces',Georgia,serif;letter-spacing:-.015em;margin:8px 0 16px}
+.sheet{background:var(--sheet);border:1px solid var(--line);border-radius:4px}
+.sec{padding:16px 24px;border-top:1px solid var(--line)}.sec:first-child{border-top:0}
+h2{font:600 12px/1.4 'IBM Plex Sans',sans-serif;text-transform:uppercase;letter-spacing:.08em;color:var(--ink2);margin:0 0 8px}
+.badge{display:inline-flex;align-items:center;padding:0 7px;border-radius:2px;border:1px solid currentColor;font:600 12.5px/19px 'IBM Plex Sans',sans-serif;font-variant-caps:all-small-caps;letter-spacing:.08em}
+.badge.ok{color:var(--ok);background:var(--okbg)}.badge.warn{color:var(--warn);background:var(--warnbg)}.badge.bad{color:var(--bad);background:var(--badbg)}
+p{margin:8px 0 0}p:first-child{margin-top:0}p.ok{color:var(--ok)}p.warn,li.warn{color:var(--warn)}
+.quote{font:500 18px/1.45 'Fraunces',Georgia,serif;border-left:2px solid var(--line2);padding-left:12px;margin:0}
 ul{margin:0;padding-left:20px}li{margin:4px 0}.muted{color:var(--muted);font-size:13.5px}
-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0}dt{color:var(--muted)}dd{margin:0;word-break:break-all;font:13px/1.6 'IBM Plex Mono',monospace}
-button{width:100%;font:500 15px 'IBM Plex Sans',sans-serif;height:44px;border-radius:6px;border:1px solid var(--accent);cursor:pointer;margin-top:8px}
-.primary{background:var(--accent);color:#fff}.primary:hover{background:var(--accent2)}.secondary{background:#fff;color:var(--accent);border-color:var(--line2)}.secondary:hover{background:var(--soft)}
-:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-textarea{width:100%;font:inherit;padding:8px 10px;border-radius:6px;border:1px solid var(--line2);background:#fff;color:var(--ink);min-height:76px}
-textarea:focus-visible{outline:2px solid var(--accent);outline-offset:0}
-label{display:block;font-size:13px;font-weight:500;color:var(--ink2);margin:12px 0 6px}
-.notice{border-left:3px solid var(--accent)}
-.card>p:first-child,.card>form:first-child{margin-top:0}.card>p:last-child{margin-bottom:0}
+.amt{font-family:'IBM Plex Mono',monospace}
+dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}dt{color:var(--muted)}dd{margin:0;word-break:break-all;font:13px/1.6 'IBM Plex Mono',monospace}
+button{width:100%;font:500 15px 'IBM Plex Sans',sans-serif;height:44px;border-radius:4px;border:1px solid var(--accent);cursor:pointer;margin-top:8px}
+.primary{background:var(--accent);color:#fff}.primary:hover{background:var(--accent2)}.secondary{background:var(--sheet);color:var(--accent);border-color:var(--line2)}.secondary:hover{background:var(--soft)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+textarea{width:100%;font:inherit;padding:8px 10px;border-radius:4px;border:1px solid var(--line2);background:#fff;color:var(--ink);min-height:76px}
+label{display:block;font-size:13px;font-weight:500;color:var(--ink2);margin:12px 0 8px}
+.notice{border-left:2px solid var(--accent);padding:2px 0 2px 12px;margin:0 0 16px;color:var(--ink2)}
 .outcome{border-left:3px solid var(--line2)}.outcome.ok{border-left-color:var(--ok)}.outcome p{margin:0 0 4px}
-@media (max-width:440px){main{padding:16px 12px 32px}.card{padding:14px}h1{font-size:22px;margin-bottom:12px}
-dl{grid-template-columns:1fr;gap:0}dt{margin-top:8px}dt:first-child{margin-top:0}.quote{font-size:16px}header .sb{font-size:11px}}
+@media (max-width:440px){main{padding:8px 12px 32px}header{padding:12px 12px 0}.sec{padding:16px}h1{font-size:24px;margin-bottom:12px}
+dl{grid-template-columns:1fr;gap:0}dt{margin-top:8px}dt:first-child{margin-top:0}.quote{font-size:17px}}
 </style></head><body>
-<header><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#0b4f4a"/><path d="M10 23V9h7a4.5 4.5 0 0 1 0 9h-7m7 0 5 5" stroke="#fff" stroke-width="2.6" fill="none"/></svg>Recourse<span class="sb">PayPal sandbox</span></header>
+<header><svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><polygon points="16.00,0.60 17.84,2.02 19.99,1.12 21.40,2.97 23.70,2.66 24.58,4.81 26.89,5.11 27.19,7.42 29.34,8.30 29.03,10.60 30.88,12.01 29.98,14.16 31.40,16.00 29.98,17.84 30.88,19.99 29.03,21.40 29.34,23.70 27.19,24.58 26.89,26.89 24.58,27.19 23.70,29.34 21.40,29.03 19.99,30.88 17.84,29.98 16.00,31.40 14.16,29.98 12.01,30.88 10.60,29.03 8.30,29.34 7.42,27.19 5.11,26.89 4.81,24.58 2.66,23.70 2.97,21.40 1.12,19.99 2.02,17.84 0.60,16.00 2.02,14.16 1.12,12.01 2.97,10.60 2.66,8.30 4.81,7.42 5.11,5.11 7.42,4.81 8.30,2.66 10.60,2.97 12.01,1.12 14.16,2.02" fill="#0b4f4a" stroke="#0b4f4a" stroke-width=".8" stroke-linejoin="round"/><circle cx="16" cy="16" r="11.6" fill="none" stroke="#f6f3ec" stroke-width="1.2" stroke-opacity=".6"/><path d="M11.6 13.3h6.5a3.85 3.85 0 0 1 0 7.7h-5.1" fill="none" stroke="#f6f3ec" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.6 10.3 11.6 13.3l3 3" fill="none" stroke="#f6f3ec" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="wm">Recourse</span><span class="sb">PayPal sandbox</span></header>
 <main>
 <h1>Purchase receipt</h1>
-${notice ? `<div class="card notice" role="status">${esc(notice)}</div>` : ''}
-<div class="card"><h2>Compliance</h2><span class="badge ${st.cls}">${esc(st.label)}</span><p class="muted">${esc(st.text)}</p></div>
-<div class="card"><h2>What you asked for</h2><p class="quote">${esc(r.source_text)}</p>
-<p class="muted">Mandate v${esc(r.mandate_version)}: ${esc(spec.category)}, up to ${esc(spec.max_total.value)} ${esc(spec.max_total.currency)} in total, by ${esc(spec.deadline)}</p></div>
-<div class="card"><h2>What was bought</h2><ul>${lines
+${notice ? `<p class="notice" role="status">${esc(notice)}</p>` : ''}
+<article class="sheet">
+<section class="sec"><h2>Compliance</h2><span class="badge ${st.cls}">${esc(st.label)}</span><p class="muted">${esc(st.text)}</p></section>
+<section class="sec"><h2>What you asked for</h2><p class="quote">${esc(r.source_text)}</p>
+<p class="muted">Mandate v${esc(r.mandate_version)}: ${esc(spec.category)}, up to ${esc(spec.max_total.value)} ${esc(spec.max_total.currency)} in total, by ${esc(spec.deadline)}</p></section>
+<section class="sec"><h2>What was bought</h2><ul>${lines
     .map((l) => `<li>${esc(l.quantity)} × ${esc(l.name)}, size ${esc(l.attributes.size)} ${l.attributes.unit_system ? esc(l.attributes.unit_system) : '(no size system given)'}${l.attributes.gender ? `, ${esc(l.attributes.gender)}'s` : ''}, ${esc(l.price)} ${esc(r.currency)}</li>`)
-    .join('')}</ul><p>Total <strong>${esc(r.total)} ${esc(r.currency)}</strong> from ${esc(r.merchant_name)}</p></div>
-<div class="card"><h2>Differences</h2>${
+    .join('')}</ul><p>Total <strong class="amt">${esc(r.total)} ${esc(r.currency)}</strong> from ${esc(r.merchant_name)}</p></section>
+<section class="sec"><h2>Differences</h2>${
     r.differences.length ? `<ul>${r.differences.map((d: string) => `<li class="warn">${esc(d)}</li>`).join('')}</ul>` : '<p class="ok">None found.</p>'
-  }${r.matches.length ? `<p class="muted">Matches: ${esc(r.matches.join('; '))}</p>` : ''}</div>
-<div class="card"><h2>Payment</h2><dl><dt>PayPal transaction</dt><dd>${esc(r.paypal_capture_id)}</dd><dt>PayPal order</dt><dd>${esc(r.paypal_order_id)}</dd><dt>Reference</dt><dd>${esc(r.order_ref)}</dd><dt>Time</dt><dd>${esc(when)}</dd></dl></div>
-<div class="card">
+  }${r.matches.length ? `<p class="muted">Matches: ${esc(r.matches.join('; '))}</p>` : ''}</section>
+<section class="sec"><h2>Payment</h2><dl><dt>PayPal transaction</dt><dd>${esc(r.paypal_capture_id)}</dd><dt>PayPal order</dt><dd>${esc(r.paypal_order_id)}</dd><dt>Reference</dt><dd>${esc(r.order_ref)}</dd><dt>Time</dt><dd>${esc(when)}</dd></dl></section>
+<section class="sec">
 ${
   r.receipt_status === 'PENDING' && !reported
     ? `<form method="post" action="/r/${esc(token)}/confirm"><button class="primary" type="submit">Confirm purchase</button></form>`
@@ -111,8 +114,9 @@ ${
     : `<form method="post" action="/r/${esc(token)}/report"><label for="desc">What is wrong? (optional)</label><textarea id="desc" name="description"></textarea><button class="secondary" type="submit">Report an issue</button></form>`
 }
 <p class="muted">Confirming is not a waiver of your PayPal dispute rights.</p>
-</div>
+</section>
 ${outcome(r)}
+</article>
 </main></body></html>`;
 }
 

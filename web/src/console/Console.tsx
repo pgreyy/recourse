@@ -13,38 +13,40 @@ ModuleRegistry.registerModules([AllEnterpriseModule]);
 // One theme for Studio: the app's paper, ink and single teal accent, IBM Plex type.
 const theme = studioTheme.withParams({
   accentColor: '#0b4f4a',
-  backgroundColor: '#ffffff',
-  foregroundColor: '#14201f',
-  borderColor: '#e0ddd5',
-  borderRadius: 6,
+  backgroundColor: '#fffdf8',
+  foregroundColor: '#161a19',
+  borderColor: '#e2dccf',
+  borderRadius: 4,
   fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
   fontSize: 14,
-  studioCanvasBackgroundColor: '#f5f4f0',
+  studioCanvasBackgroundColor: '#f6f3ec',
   studioCanvasFontFamily: "'IBM Plex Sans', system-ui, sans-serif",
   studioMinWidth: 0,
+  studioCanvasMinWidth: 0,
+  studioCanvasStandaloneMinWidth: 0,
   studioMinHeight: 0,
-  gridHeaderBackgroundColor: '#faf9f6',
-  gridHeaderTextColor: '#44514f',
-  gridOddRowBackgroundColor: '#ffffff',
+  gridHeaderBackgroundColor: '#f9f6ef',
+  gridHeaderTextColor: '#3d4542',
+  gridOddRowBackgroundColor: '#fffdf8',
   gridRowHoverColor: '#eef4f3',
   // Charts: IBM Plex, ink text, teal for money recovered, amber for money still pending.
   chartFontFamily: "'IBM Plex Sans', system-ui, sans-serif",
   chartFontSize: 12,
-  chartTextColor: '#14201f',
-  chartSubtleTextColor: '#5f6b68',
-  chartGridLineColor: '#ebe8e1',
-  chartAxisLineColor: '#c7c2b6',
+  chartTextColor: '#161a19',
+  chartSubtleTextColor: '#59615e',
+  chartGridLineColor: '#ebe5d9',
+  chartAxisLineColor: '#c4bba8',
   chartPaletteFills1Color: '#0b4f4a',
   chartPaletteStrokes1Color: '#0b4f4a',
-  chartPaletteFills2Color: '#b8862b',
-  chartPaletteStrokes2Color: '#b8862b',
+  chartPaletteFills2Color: '#857a62',
+  chartPaletteStrokes2Color: '#857a62',
 } as any);
 
 // Built-in AG Studio widgets on the overview share one card look.
-const CARD = { backgroundColor: '#ffffff', borderEnabled: true, borderWidth: 1, borderColor: '#e0ddd5', borderRadius: 6 };
+const CARD = { backgroundColor: '#fffdf8', borderEnabled: true, borderWidth: 1, borderColor: '#e2dccf', borderRadius: 4 };
 // Titles like the console's card headings; tile labels small and quiet, values large.
-const HEADING = { typography: { fontFamily: "'IBM Plex Serif', Georgia, serif", fontSize: 16, fontWeight: 'bold' }, color: '#14201f' };
-const SUBHEAD = { typography: { fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontSize: 12.5 }, color: '#5f6b68', wrapping: true };
+const HEADING = { typography: { fontFamily: "'Fraunces', Georgia, serif", fontSize: 17, fontWeight: 'bold' }, color: '#161a19' };
+const SUBHEAD = { typography: { fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontSize: 12.5 }, color: '#59615e', wrapping: true };
 const money2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const MONEY = { format: 'currencyFormat', formatOptions: { format: money2 } } as const;
 const COUNT = { format: 'integerFormat' } as const;
@@ -131,16 +133,16 @@ function dataSources(l: Loaded): AgDataSourcesDefinition {
 }
 
 /** The overview page: six value tiles, the cases needing a decision, one chart and the exposure grid. */
-function overviewPage(l: Loaded) {
+function overviewPage(l: Loaded, narrow = false) {
   const o = l.overview;
   const cap = o.exposure.reduce((t: number, e: any) => t + Number(e.cap.value), 0);
   const tile = (field: string, title: string, caption: string) => ({
     type: 'value',
     dataMapping: { value: [{ id: `headline.${field}`, aggregation: 'sum' }] },
     format: {
-      title: { enabled: true, text: title, wrapping: true, typography: { fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontSize: 12.5, fontWeight: 'bold' }, color: '#44514f' },
+      title: { enabled: true, text: title, wrapping: true, typography: { fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontSize: 12.5, fontWeight: 'bold' }, color: '#3d4542' },
       caption: { enabled: true, text: caption, ...SUBHEAD },
-      style: { textAlign: 'left', verticalAlign: 'center', color: '#14201f', typography: { fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontWeight: 'bold' }, label: { enabled: false } },
+      style: { textAlign: 'left', verticalAlign: 'center', color: '#161a19', typography: { fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontWeight: 'normal' }, label: { enabled: false } },
       widget: CARD,
     },
   });
@@ -170,7 +172,20 @@ function overviewPage(l: Loaded) {
         format: { title: { enabled: true, text: 'Operator exposure', ...HEADING }, subtitle: { enabled: true, text: 'USD. Accepted liability agreements: what each operator has paid against its total cap.', ...SUBHEAD }, widget: CARD },
       },
     },
-    widgetLayout: {
+    // On a phone the same widgets stack: two tiles per row, then each panel at full width.
+    widgetLayout: narrow
+      ? {
+          purchases: { xTrack: 0, yTrack: 0, xSpan: 12, ySpan: 9 },
+          open: { xTrack: 12, yTrack: 0, xSpan: 12, ySpan: 9 },
+          recovered: { xTrack: 0, yTrack: 9, xSpan: 12, ySpan: 9 },
+          pending: { xTrack: 12, yTrack: 9, xSpan: 12, ySpan: 9 },
+          exposure: { xTrack: 0, yTrack: 18, xSpan: 12, ySpan: 9 },
+          avoided: { xTrack: 12, yTrack: 18, xSpan: 12, ySpan: 9 },
+          attention: { xTrack: 0, yTrack: 27, xSpan: 24, ySpan: 14 },
+          chart: { xTrack: 0, yTrack: 41, xSpan: 24, ySpan: 20 },
+          exposureGrid: { xTrack: 0, yTrack: 61, xSpan: 24, ySpan: 14 },
+        }
+      : {
       purchases: { xTrack: 0, yTrack: 0, xSpan: 4, ySpan: 9 },
       open: { xTrack: 4, yTrack: 0, xSpan: 4, ySpan: 9 },
       recovered: { xTrack: 8, yTrack: 0, xSpan: 4, ySpan: 9 },
@@ -180,7 +195,7 @@ function overviewPage(l: Loaded) {
       attention: { xTrack: 0, yTrack: 9, xSpan: 24, ySpan: 12 },
       chart: { xTrack: 0, yTrack: 21, xSpan: 14, ySpan: 19 },
       exposureGrid: { xTrack: 14, yTrack: 21, xSpan: 10, ySpan: 19 },
-    },
+        },
   };
 }
 
@@ -189,13 +204,15 @@ const PANELS = { view: { right: [] as never[], left: [] as never[] } };
 
 const LICENSE = (import.meta.env.VITE_AG_STUDIO_LICENSE_KEY as string | undefined) || undefined;
 
-const RAIL: Array<{ id: PageId; label: string }> = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'cases', label: 'Cases' },
-  { id: 'case', label: 'Case detail' },
-  { id: 'agents', label: 'Agents and operators' },
-  { id: 'scorecard', label: 'Scorecard' },
-];
+/** Each console screen's header: a title and its purpose in one line. */
+const HEAD: Record<PageId, { title: string; purpose: string }> = {
+  overview: { title: 'Overview', purpose: 'What agents bought, what is waiting for a decision, and what PayPal has confirmed as recovered.' },
+  cases: { title: 'Cases', purpose: 'Every case opened by a buyer report or a PayPal dispute. Select a row for a summary.' },
+  case: { title: 'Case detail', purpose: 'One case: what the buyer authorised, what the agent did, and who is responsible.' },
+  agents: { title: 'Agents and operators', purpose: "Reputation counts only finalized rulings; the merchant's checkout policy follows from it." },
+  settlements: { title: 'Settlements', purpose: 'Every settlement and each PayPal action with its id. Money counts as recovered only once PayPal confirms.' },
+  scorecard: { title: 'Assessment scorecard', purpose: 'The assessment pipeline on fixed cases with known answers. The number that matters most: how often it blames an agent wrongly.' },
+};
 
 export function Console() {
   const { query } = useLocation();
@@ -204,14 +221,16 @@ export function Console() {
   const [ready, setReady] = useState(false);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadError, setLoadError] = useState<Error | null>(null);
-  const caseCount = loaded ? loaded.cases.length : null;
   const [harness, setHarness] = useState<AgAiHarness | null>(null);
   const [clerkOpen, setClerkOpen] = useState(query.get('clerk') === '1');
 
   // The data is fetched first, then Studio starts with it: tiles, chart and grids are built-in widgets on these tables.
   useEffect(() => {
     Promise.all([api<any[]>('/console/cases'), api<any>('/console/overview')])
-      .then(([cases, overview]) => setLoaded({ cases, overview }))
+      .then(([cases, overview]) => {
+        setLoaded({ cases, overview });
+        window.dispatchEvent(new CustomEvent('console:cases', { detail: cases.length }));
+      })
       .catch(setLoadError);
   }, []);
   const data = useMemo(() => (loaded ? dataSources(loaded) : undefined), [loaded]);
@@ -221,11 +240,21 @@ export function Console() {
     setHarness(createAiHarness(e.api as any, () => ({ agents: [clerkAgent(e.api as any)], primary: 'clerk', promptStarters: CLERK_STARTERS })));
   }, []);
 
+  // The sidebar's "Ask the Clerk" toggles the panel; the sidebar is told whether it is open.
   useEffect(() => {
     const close = () => setClerkOpen(false);
+    const toggle = () => setClerkOpen((o) => !o);
     window.addEventListener('clerk:close', close);
-    return () => window.removeEventListener('clerk:close', close);
+    window.addEventListener('clerk:toggle', toggle);
+    return () => {
+      window.removeEventListener('clerk:close', close);
+      window.removeEventListener('clerk:toggle', toggle);
+    };
   }, []);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('clerk:state', { detail: clerkOpen }));
+  }, [clerkOpen]);
+  useEffect(() => () => void window.dispatchEvent(new CustomEvent('clerk:state', { detail: false })), []);
 
   useEffect(() => {
     const a = ref.current?.api;
@@ -237,10 +266,11 @@ export function Console() {
   const initialState = useMemo(
     () => ({
       pages: [
-        loaded ? overviewPage(loaded) : { id: 'overview', widgets: {} },
+        loaded ? overviewPage(loaded, window.matchMedia('(max-width: 767px)').matches) : { id: 'overview', widgets: {} },
         { id: 'cases', layout: { type: 'standalone' }, widgets: { grid: { type: 'rc-cases' } } },
         { id: 'case', layout: { type: 'standalone' }, widgets: { detail: { type: 'rc-case' } } },
         { id: 'agents', layout: { type: 'standalone' }, widgets: { rep: { type: 'rc-reputation' } } },
+        { id: 'settlements', layout: { type: 'standalone' }, widgets: { st: { type: 'rc-settlements' } } },
         { id: 'scorecard', layout: { type: 'standalone' }, widgets: { sc: { type: 'rc-scorecard' } } },
       ],
       selectedPageId: page,
@@ -253,25 +283,17 @@ export function Console() {
   const widgets = useMemo(() => createWidgets<any>({ additionalTypes: WIDGETS as any, menu: [{ label: 'Recourse', widgetIds: WIDGETS.map((w) => w.id) }] }), []);
 
 
-  const layout = useMemo(() => ({ widgetBorderEnabled: false, widgetPadding: 0, pagePadding: 16, widgetBackgroundColor: 'transparent', backgroundColor: '#f5f4f0' }), []);
+  const layout = useMemo(() => ({ widgetBorderEnabled: false, widgetPadding: 0, pagePadding: 16, widgetBackgroundColor: 'transparent', backgroundColor: '#f6f3ec' }), []);
 
   return (
     <div className={`console${clerkOpen ? ' with-clerk' : ''}`}>
-      <nav className="rail" aria-label="Console sections">
-        <h3>Console</h3>
-        {RAIL.map((r) => (
-          <button key={r.id} aria-current={page === r.id ? 'page' : undefined} onClick={() => navigate(`/console?page=${r.id}${r.id === 'case' && query.get('case') ? `&case=${query.get('case')}` : ''}`)}>
-            <span>{r.label}</span>
-            {r.id === 'cases' && caseCount !== null && <span className="count">{caseCount}</span>}
-          </button>
-        ))}
-        <div className="clerk-hint">
-          <button className="btn secondary" style={{ width: '100%' }} onClick={() => setClerkOpen((o) => !o)} aria-expanded={clerkOpen}>
-            {clerkOpen ? 'Hide the Clerk' : 'Ask the Clerk'}
-          </button>
-          <p style={{ marginTop: 8 }}>A read-only assistant for cases, rulings and settlements. It can propose an action; only the buttons on a case carry it out.</p>
-        </div>
-      </nav>
+      <div className="console-main">
+        <header className="page-head console-head">
+          <div>
+            <h1>{HEAD[page].title}</h1>
+            <p>{HEAD[page].purpose}</p>
+          </div>
+        </header>
       <div className="studio-host">
         {loadError && <ErrorNote error={loadError} />}
         {!loaded && !loadError && <p className="muted" style={{ padding: 16 }}>Loading the console…</p>}
@@ -292,6 +314,7 @@ export function Console() {
           />
         </AgStudioProvider>
         )}
+      </div>
       </div>
       {clerkOpen && <ClerkPanel harness={harness} onClose={() => setClerkOpen(false)} />}
     </div>

@@ -4,12 +4,6 @@ export function Reputation() {
   const r = useLoad((signal) => api<{ agents: any[]; operators: any[] }>('/console/agents', { signal }), []);
   return (
     <div className="w stack" style={{ gap: 16 }}>
-      <div className="w-head">
-        <div>
-          <h2>Agents and operators</h2>
-          <p>Reputation counts only finalized rulings: recovered, or decided on appeal. The merchant's checkout policy follows from it.</p>
-        </div>
-      </div>
       <ErrorNote error={r.error} />
       {r.loading && !r.data && <p className="loading">Loading…</p>}
       {r.data && (

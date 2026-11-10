@@ -3,8 +3,9 @@ import { CasesGrid } from './CasesGrid';
 import { AttentionList } from './Overview';
 import { Reputation } from './Reputation';
 import { Scorecard } from './Scorecard';
+import { Settlements } from './Settlements';
 
-export const PAGES = ['overview', 'cases', 'case', 'agents', 'scorecard'] as const;
+export const PAGES = ['overview', 'cases', 'case', 'agents', 'settlements', 'scorecard'] as const;
 export type PageId = (typeof PAGES)[number];
 
 /** Custom AG Studio widgets for the screens that need Recourse's own logic (the overview's tiles, chart and exposure
@@ -24,5 +25,6 @@ export const WIDGETS = [
   def('rc-cases', 'Cases', CasesGrid, 'All cases with agent, operator, verdict, evidence and settlement status.'),
   def('rc-case', 'Case', CaseDetail, 'One case: what was authorised, what happened, and the conclusion, with its settlement.'),
   def('rc-reputation', 'Agents and operators', Reputation, 'Agent reliability and merchant policy; operator accountability.'),
+  def('rc-settlements', 'Settlements', Settlements, 'Every settlement obligation with its PayPal actions, ids and confirmation.'),
   def('rc-scorecard', 'Scorecard', Scorecard, 'Accuracy of the assessment model on the fixed test cases.'),
 ];

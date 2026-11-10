@@ -45,7 +45,7 @@ export function AgentRun() {
           <p>Pick an agent version and a signed mandate, then watch every step it takes. Each step is written to a hash-chained flight recorder, and the chain is anchored in the PayPal order at checkout.</p>
         </div>
       </div>
-      <div className="grid2" style={{ gridTemplateColumns: 'minmax(0, 340px) minmax(0, 1fr)', alignItems: 'start' }}>
+      <div className="grid2 grid-run" style={{ alignItems: 'start' }}>
         <aside className="stack">
           <section className="card card-pad stack" aria-labelledby="start-title">
             <h2 id="start-title">Start a run</h2>

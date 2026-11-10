@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, ErrorNote, Id, Link, Modal, money, navigate, Status, short, useLoad, useLocation, when, maskEmail } from '../lib';
+import { api, ErrorNote, Id, Link, Modal, money, navigate, Status, short, useLoad, useLocation, when, maskEmail, Notice } from '../lib';
 
 type Agreement = {
   id: string;
@@ -87,7 +87,7 @@ function OperatorDetail({ id }: { id: string }) {
 
   const t = shown?.terms;
   return (
-    <div className="grid2" style={{ gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', alignItems: 'start' }}>
+    <div className="grid2 grid-op" style={{ alignItems: 'start' }}>
       <section className="card" aria-labelledby="agreement-title">
         <div className="card-head">
           <h2 id="agreement-title">{t ? `Liability agreement, version ${shown!.version}` : 'Liability agreement'}</h2>
@@ -133,9 +133,9 @@ function OperatorDetail({ id }: { id: string }) {
               <Clause title="Evidence standard" text={t.evidence_standard} />
               <Clause title="Payment" text={t.payment_terms} />
               <Clause title="Revocation" text={t.revocation_terms} />
-              <div className="notice warn">
-                <strong style={{ color: 'var(--warn-ink)' }}>Sandbox disclosure.</strong> {t.disclosure.replace(/^Sandbox disclosure:\s*/i, '').replace(/^\w/, (x: string) => x.toUpperCase())}
-              </div>
+              <Notice id="operator-sandbox-disclosure" summary="Sandbox: the operator's saved PayPal can be charged only by the demo merchant.">
+                {t.disclosure.replace(/^Sandbox disclosure:\s*/i, '').replace(/^\w/, (x: string) => x.toUpperCase())}
+              </Notice>
               <div>
                 <h3 style={{ marginBottom: 6 }}>Agent versions covered</h3>
                 <p>{t.covered_agent_versions.map((v: any) => `${v.agent_name} v${v.version}`).join(', ')}</p>
@@ -151,16 +151,16 @@ function OperatorDetail({ id }: { id: string }) {
       <aside className="stack">
         <section className="card card-pad stack" aria-labelledby="why-title">
           <h2 id="why-title">Why operators sign</h2>
-          <div className="stack" style={{ gap: 10 }}>
-            <div className="notice" style={{ borderLeftColor: 'var(--ok-ink)' }}>
+          <dl className="why">
+            <dt>
               <Status tone="ok">Covered</Status>
-              <p style={{ marginTop: 6, color: 'var(--ink)' }}>Covered agents shop under normal policy.</p>
-            </div>
-            <div className="notice warn">
+            </dt>
+            <dd>Covered agents shop under normal checkout policy.</dd>
+            <dt>
               <Status tone="warn">Not covered</Status>
-              <p style={{ marginTop: 6, color: 'var(--ink)' }}>Uncovered agents need buyer approval on every purchase.</p>
-            </div>
-          </div>
+            </dt>
+            <dd>Uncovered agents need the buyer's approval at PayPal on every purchase.</dd>
+          </dl>
           {agents.data && (
             <table className="plain" aria-label="Agent versions and coverage">
               <thead>

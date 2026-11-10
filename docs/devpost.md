@@ -78,8 +78,10 @@ step-up, and its next checkout returned 422 with nothing charged.
   summary drawer), the case screen in three columns (Authorised, What happened, Conclusion), each check tagged Code or
   AI, the settlement panel with every PayPal id and Confirmed or Pending, agents and operators, and the scorecard.
 - The case screen opens from a cached PayPal verification and says when it last checked PayPal, with Re-verify now.
-- One theme (paper, ink and one teal accent), AA contrast on every text pair, keyboard reachable, status always in
-  words as well as colour.
+- An accountability ledger for money: ink on warm paper, one deep green accent and one sparing signal colour for
+  faults, a seal mark with a return arrow, status labels styled as ledger stamps, ids and amounts in monospace.
+- One collapsible sidebar for the whole app (Ctrl+B), a drawer on phones; AA contrast on every text pair (lowest
+  5.24:1), keyboard reachable, status always in words as well as colour.
 
 ## Presentation
 

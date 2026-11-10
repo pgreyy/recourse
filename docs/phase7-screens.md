@@ -7,11 +7,13 @@ comes from the API, the database or a live PayPal read; nothing is mocked. Scree
 The screenshots were retaken on 2026-11-10, after the demo reset, from a local copy of the database
 (a `pg_dump` of Neon loaded into Postgres 18) with scenarios A and B restored from the archive and A's
 reputation included. The agent run (`03`) is a dry run of Acme Shopper v1.3 on a draft mandate: a live
-run needs the buyer's approval at PayPal. The Clerk answers (`11`, `11b`) are real gpt-5-nano answers
-on that copy. Neon itself holds the clean demo (no cases).
+run needs the buyer's approval at PayPal. The Clerk answers (`11`, `11b`, `11c`) are real gpt-5-nano
+answers on that copy. Neon itself holds the clean demo (no cases). The scorecard copy includes the
+2026-11-10 runs from Neon.
 
 | Screen | Path | Screenshot |
 |---|---|---|
+| Home (the four steps) | `/app/` | `00-home.png` |
 | Operator onboarding | `/app/operator` | `01-operator-onboarding.png` |
 | Buyer mandate | `/app/buyer` | `02-buyer-mandate.png`, `02b-buyer-new-mandate.png` |
 | Agent run | `/app/agent?run=<id>` | `03-agent-run.png` |
@@ -21,21 +23,39 @@ on that copy. Neon itself holds the clean demo (no cases).
 | Console: case detail and settlement | `/app/console?page=case&case=<id>` | `07-case-detail.png`, `08-settlement-recovered.png`, `08b-settlement-dispute.png` |
 | Console: agents and operators | `/app/console?page=agents` | `09-agents-operators.png` |
 | Console: scorecard | `/app/console?page=scorecard` | `10-scorecard.png` |
-| The Clerk | `/app/console?clerk=1` | `11-clerk-question.png`, `11b-clerk-refuses-to-act.png` |
+| Console: settlements | `/app/console?page=settlements` | `12-settlements.png` |
+| The Clerk | sidebar, Ask the Clerk | `11-clerk-question.png`, `11b-clerk-refuses-to-act.png`, `11c-clerk-refund-request.png` |
+| Sidebar collapsed (label on hover) | any screen, Ctrl+B | `13-sidebar-collapsed.png` |
+| Phone, 390 px wide | any screen | `14-phone-menu.png`, `14b-phone-overview.png`, `14c-phone-case.png`, `14d-phone-agent-run.png` |
 
 ## Design rules
 
-- One theme: paper and ink with one accent (deep teal), IBM Plex Sans, Serif and Mono. The same
-  palette themes AG Studio (`studioTheme.withParams`) and AG Grid (`studioGridTheme.withParams`).
-- Status is always a text label; colour only repeats it. Every text and background pair meets WCAG
-  AA (checked: the lowest is 5.04:1, muted text on the page background).
+- An accountability ledger for money: ink on warm paper, one accent (the deep green), and one sparing
+  signal colour (oxide red) for warnings and faults. Fraunces for headings and the wordmark, IBM Plex
+  Sans for text, IBM Plex Mono for ids, hashes and amounts; tabular figures everywhere. The same palette
+  themes AG Studio (`studioTheme.withParams`) and AG Grid (`studioGridTheme.withParams`).
+- The mark is a notched seal with a return arrow ([logo-options.md](logo-options.md)); it is also the
+  favicon and the receipt's header.
+- One collapsible sidebar holds all navigation: Walkthrough (1 Operator, 2 Buyer, 3 Agent run), Console
+  (Overview, Cases, Case detail, Agents and operators, Settlements, Scorecard), then For judges, Ask the
+  Clerk and the PayPal sandbox marker. Expanded 248 px, collapsed 64 px (icons, a label on hover or
+  focus); the toggle has `aria-expanded`, Ctrl+B toggles it, the state is remembered in this browser.
+  Under 768 px it is a drawer from a menu button (Escape closes it, focus returns to the button).
+- Status labels are ledger stamps: small caps, a crisp border, the word always present; colour only
+  repeats it. Every text and background pair meets WCAG AA: checked on 2026-11-10 with a contrast
+  calculation over the palette, lowest 5.24:1 (the disabled button); muted text on the page is 5.75:1.
+  Chart bars meet 3:1 against their background.
+- Explanatory notices are one quiet line with an "i", a More link that expands the full text in place,
+  and a Dismiss button (remembered in this browser). Status lines that are part of the story (the
+  firewall warning, "awaiting PayPal", PayPal approval received) stay and are not dismissible.
 - Every control is a native button, link or input, reachable by keyboard, with a visible focus ring.
 - On the case screen, each check carries a **Code** or **AI** tag. The model's confidence is never
   shown.
 
 ## The console on AG Studio
 
-- AG Studio in **view mode** with five pages (overview, cases, case, agents, scorecard).
+- AG Studio in **view mode** with six pages (overview, cases, case, agents, settlements, scorecard),
+  each under a page header with its purpose in one line.
 - The overview is built from AG Studio's own widgets on Studio data tables (`cases`, `headline`,
   `exposure`, loaded from the API when the console opens), styled by the console theme: six `value`
   tiles, a `column-chart-stacked` integrated chart ("Recovered vs pending by agent version", named

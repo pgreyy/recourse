@@ -1,3 +1,4 @@
+import { Icons } from './icons';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 // ---------- API ----------
@@ -119,6 +120,53 @@ export function Id({ children, title }: { children: ReactNode; title?: string })
     <span className="idv" title={title}>
       {children}
     </span>
+  );
+}
+
+/**
+ * An explanatory notice as one quiet line: an "i", a short summary, "More" to expand the full text in place, and a
+ * Dismiss button. A dismissal is remembered in this browser (localStorage, ignored if storage is unavailable).
+ */
+export function Notice({ id, summary, children }: { id: string; summary: ReactNode; children?: ReactNode }) {
+  const key = `recourse.notice.${id}`;
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem(key) === 'dismissed';
+    } catch {
+      return false;
+    }
+  });
+  const [open, setOpen] = useState(false);
+  if (hidden) return null;
+  const dismiss = () => {
+    try {
+      localStorage.setItem(key, 'dismissed');
+    } catch {
+      /* storage unavailable: dismissed for this view only */
+    }
+    setHidden(true);
+  };
+  return (
+    <div className="note" role="note">
+      <span className="note-i">
+        <Icons.info />
+      </span>
+      <div className="note-body">
+        <span>{summary}</span>
+        {children && (
+          <>
+            {' '}
+            <button type="button" className="linkish" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+              {open ? 'Less' : 'More'}
+            </button>
+            {open && <div className="note-more">{children}</div>}
+          </>
+        )}
+      </div>
+      <button type="button" className="note-x" aria-label="Dismiss" title="Dismiss" onClick={dismiss}>
+        <Icons.close />
+      </button>
+    </div>
   );
 }
 

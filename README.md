@@ -180,7 +180,10 @@ Postman collection: [docs/reference.md](docs/reference.md).
 
 - **The operator's saved PayPal is scoped to one merchant.** In the sandbox, the operator's PayPal is vaulted by the
   demo merchant's account, so only that merchant can charge it. Recovering for losses at other merchants needs a PayPal
-  platform or multiparty setup. The liability agreement says so in its disclosure.
+  platform or multiparty setup. The liability agreement says so in its disclosure, word for word: "In this sandbox,
+  the operator's saved PayPal payment method is vaulted by the Recourse demo merchant account, so it can only be
+  charged by that merchant. In production, charging an operator for liability arising at other merchants would need a
+  PayPal platform or multiparty arrangement." (On the operator screen it is a one-line note with More.)
 - **No forced dispute decisions.** The sandbox never offered `adjudicate` or `require-evidence` on a Resolution Center
   dispute, and forcing it was refused (`ACTION_NOT_ALLOWED_IN_CURRENT_DISPUTE_STATE`, debug `f888682448d6a`). So scenario
   B ends with PayPal's status UNDER_REVIEW, shown live, never an assumed outcome.

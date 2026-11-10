@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { api, Link, useLoad } from '../lib';
+import { api, Link, useLoad, Notice } from '../lib';
 
 type Login = { email: string; password: string | null } | null;
 type JudgeInfo = { buyer: Login; operator: Login; limits: { ai_calls: { limit: number; used: number; remaining: number }; agent_runs_per_ip_per_hour: number } };
@@ -28,10 +28,9 @@ export function Judges() {
             <LoginCard title="Sandbox buyer (approves mandates, opens the dispute)" l={j.data?.buyer} />
             <LoginCard title="Sandbox operator (already onboarded)" l={j.data?.operator} />
           </div>
-          <p className="notice">
-            The PayPal pages you are sent to are real PayPal, in PayPal's <strong>sandbox</strong> (sandbox.paypal.com): log in there with the sandbox accounts
-            above, never with a real PayPal account. No real money moves.
-          </p>
+          <Notice id="judges-sandbox" summary="The PayPal pages are real PayPal, in its sandbox. No real money moves.">
+            You are sent to sandbox.paypal.com: log in there with the sandbox accounts above, never with a real PayPal account.
+          </Notice>
           {j.data && (
             <p className="small muted">
               Demo limits, to protect the AI budget: {j.data.limits.ai_calls.limit} AI calls per hour for everyone together ({j.data.limits.ai_calls.remaining} left
@@ -49,9 +48,9 @@ export function Judges() {
               <b>Approve with PayPal</b> and log in as the sandbox buyer. You come back to a signed, active mandate.
             </>,
             <>
-              <Link to="/agent">Agent run</Link>: pick <b>Acme Shopper v1.3 (fast)</b> and your mandate, <b>Run agent</b>. Watch the timeline: a{' '}
-              <b>Firewall warning</b> (the listing gives size 10 with no size system), then <b>Checkout proceeded despite the warning</b>. It ends with the PayPal
-              order and capture ids and <b>Decision trail anchored</b>.
+              <Link to="/agent">Agent run</Link>: pick <b>Acme Shopper v1.3 (fast)</b> and your mandate, <b>Run agent</b>. Watch the timeline: the cart is out of stock,{' '}
+              the merchant suggests a substitute (size 10 with no size system), the agent accepts it, then a <b>Firewall warning</b> and <b>Checkout went ahead despite the warning</b>. It ends with the PayPal
+              order and capture ids and <b>Decision trail anchored in the PayPal order</b>.
             </>,
             <>
               <b>Open the receipt</b> (on the same screen) and <b>Report an issue</b>: <q>These are UK sizing, I asked for US 10.</q>
@@ -104,8 +103,8 @@ export function Judges() {
           <h2 id="more">Also worth a look</h2>
           <ul style={{ margin: 0, paddingLeft: 20 }} className="stack">
             <li>
-              <b>The Clerk</b> (<Link to="/console?clerk=1">open it</Link>): ask <q>Which agent version caused the most recovered losses this week?</q> Then ask it to
-              approve a ruling: it can only propose, and only the button on the case acts.
+              <b>The Clerk</b> (<b>Ask the Clerk</b> in the sidebar): ask <q>Which agent version caused the most recovered losses this week?</q> Then ask it to
+              refund a case: it cannot move money, and it states refunds and charges only from the settlement records, with their PayPal ids.
             </li>
             <li>
               <b>Operator onboarding</b> (<Link to="/operator">open it</Link>): Drift Commerce has no accepted agreement, so its agent needs the buyer's approval on

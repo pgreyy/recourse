@@ -41,12 +41,6 @@ export function Scorecard() {
 
   return (
     <div className="w grid-w" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div className="w-head">
-        <div>
-          <h2>Assessment scorecard</h2>
-          <p>The assessment pipeline (code checks, then the model, then validation) on fixed test cases with known answers. The number that matters most: how often it blames an agent wrongly.</p>
-        </div>
-      </div>
       <ErrorNote error={r.error} />
       <div style={{ height: Math.min(56 + runs.length * 42 + 2, 260) }}>
         <AgGridReact
