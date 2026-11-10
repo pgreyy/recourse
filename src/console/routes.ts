@@ -78,6 +78,52 @@ async function caseDetail(cs: CaseRow, force: boolean) {
 consoleRoutes.get('/cases/:id', route(async (req, res) => res.json(await caseDetail(await findCase(req.params.id), req.query.reverify === '1'))));
 
 /** Re-verify now: read PayPal live and refresh the cache. */
+/**
+ * GET /console/cases/:id/operator-view: what the operator needs to accept or appeal a decision: the operator, its
+ * accepted agreement with the cap used and left, the appeal deadline and any appeal, and a preview of the money.
+ */
+consoleRoutes.get(
+  '/cases/:id/operator-view',
+  route(async (req, res) => {
+    const cs = await findCase(req.params.id);
+    const ctx = (
+      await db().query(
+        `SELECT o.id AS operator_id, o.name AS operator_name, ord.total_value::text AS total, ord.currency
+           FROM orders ord JOIN agent_versions v ON v.id = ord.agent_version_id JOIN agents ag ON ag.id = v.agent_id JOIN operators o ON o.id = ag.operator_id
+          WHERE ord.id = $1`,
+        [cs.order_id],
+      )
+    ).rows[0];
+    if (!ctx) return res.json({ operator: null });
+    const la = (
+      await db().query(
+        `SELECT id, version, per_incident_cap::text, aggregate_cap::text, currency, appeal_window_hours FROM liability_agreements WHERE operator_id = $1 AND status = 'ACCEPTED'`,
+        [ctx.operator_id],
+      )
+    ).rows[0];
+    const used = la ? (await db().query(`SELECT COALESCE(SUM(recovered_value), 0)::text AS v FROM settlement_obligations WHERE liability_agreement_id = $1 AND status = 'RECOVERED'`, [la.id])).rows[0].v : '0';
+    const ruling = (await db().query('SELECT id FROM rulings WHERE case_id = $1 ORDER BY created_at DESC LIMIT 1', [cs.id])).rows[0];
+    const appeal = ruling ? (await db().query('SELECT id, status, note, flagged, created_at, decided_by, decision_note FROM appeals WHERE ruling_id = $1 ORDER BY created_at DESC LIMIT 1', [ruling.id])).rows[0] ?? null : null;
+    const total = Number(ctx.total);
+    const perIncident = la ? Number(la.per_incident_cap) : 0;
+    res.json({
+      operator: { id: ctx.operator_id, name: ctx.operator_name },
+      agreement: la
+        ? { version: la.version, per_incident_cap: la.per_incident_cap, aggregate_cap: la.aggregate_cap, currency: la.currency.trim(), appeal_window_hours: la.appeal_window_hours, used: Number(used).toFixed(2), cap_remaining: (Number(la.aggregate_cap) - Number(used)).toFixed(2) }
+        : null,
+      appeal,
+      // Before settlement: the buyer is refunded the total; the operator is charged that plus any PayPal fee the refund
+      // does not return, never more than the per-incident cap or what is left of the total cap.
+      preview: {
+        buyer_refund: total.toFixed(2),
+        operator_charge_from: total.toFixed(2),
+        operator_charge_limit: la ? Math.min(perIncident, Number(la.aggregate_cap) - Number(used)).toFixed(2) : null,
+        currency: ctx.currency.trim(),
+      },
+    });
+  }),
+);
+
 consoleRoutes.post('/cases/:id/verify', route(async (req, res) => res.json(await caseDetail(await findCase(req.params.id), true))));
 
 consoleRoutes.get(

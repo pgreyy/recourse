@@ -211,7 +211,7 @@ const HEAD: Record<PageId, { title: string; purpose: string }> = {
   case: { title: 'Case detail', purpose: 'One case: what the buyer authorised, what the agent did, and who is responsible.' },
   agents: { title: 'Agents and operators', purpose: "Reputation counts only finalized decisions; the merchant's checkout policy follows from it." },
   settlements: { title: 'Settlements', purpose: 'Every settlement and each PayPal action with its id. Money counts as recovered only once PayPal confirms.' },
-  scorecard: { title: 'Assessment scorecard', purpose: 'The assessment pipeline on fixed cases with known answers. The number that matters most: how often it blames an agent wrongly.' },
+  scorecard: { title: 'Assessment scorecard', purpose: 'An internal, labelled evaluation set (retail and travel cases with known answers): evidence of behaviour on known cases, not production accuracy.' },
 };
 
 export function Console() {

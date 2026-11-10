@@ -14,7 +14,8 @@ type Agreement = {
 export function Operator() {
   const { query } = useLocation();
   const ops = useLoad(() => api<Array<{ id: string; name: string; agents: number }>>('/console/operators'), []);
-  const opId = query.get('operator') ?? [...(ops.data ?? [])].sort((a, b) => b.agents - a.agents)[0]?.id ?? null;
+  // Default: the travel demo's operator (the one with the most agents).
+  const opId = query.get('operator') ?? (ops.data ?? []).find((o: any) => o.name === 'Wayfare Agents')?.id ?? [...(ops.data ?? [])].sort((a, b) => b.agents - a.agents)[0]?.id ?? null;
   const paypal = query.get('paypal');
 
   return (

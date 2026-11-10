@@ -23,6 +23,7 @@ const CartBody = z
   .object({
     items: z.array(z.object({ variant_id: z.string().trim().min(1), quantity: z.number().int().min(1).max(20) }).passthrough()),
     case_ref: CaseRef.optional(),
+    merchant_id: z.string().trim().min(1).optional(),
     customer: z.record(z.string(), z.unknown()).optional(),
     shipping_address: z.record(z.string(), z.unknown()).optional(),
   })
@@ -113,13 +114,13 @@ export type CartResponse = Awaited<ReturnType<typeof respond>>;
 type CartInput = { items: Array<{ variant_id: string; quantity: number }>; customer?: unknown; shipping_address?: unknown };
 
 /** Create a cart (service used by the HTTP route and by agent tools). case_ref defaults to the cart id. */
-export async function createCart(input: CartInput, caseRef?: string): Promise<CartResponse> {
-  await merchant(DEMO_MERCHANT.id);
+export async function createCart(input: CartInput, caseRef?: string, merchantId: string = DEMO_MERCHANT.id): Promise<CartResponse> {
+  await merchant(merchantId);
   const id = `CART-${randomBytes(8).toString('hex').toUpperCase()}`;
   const items = input.items.map((i) => ({ variant_id: i.variant_id, quantity: i.quantity }));
   const { rows } = await db().query<CartRow>(
     `INSERT INTO carts (id, merchant_id, case_ref, items, customer, shipping_address) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [id, DEMO_MERCHANT.id, caseRef ?? id, JSON.stringify(items), input.customer ? JSON.stringify(input.customer) : null, input.shipping_address ? JSON.stringify(input.shipping_address) : null],
+    [id, merchantId, caseRef ?? id, JSON.stringify(items), input.customer ? JSON.stringify(input.customer) : null, input.shipping_address ? JSON.stringify(input.shipping_address) : null],
   );
   return respond(rows[0], 'merchant.cart.created');
 }
@@ -148,7 +149,7 @@ merchantCart.post(
   '/',
   route(async (req, res) => {
     const body = CartBody.parse(req.body);
-    res.status(201).json(await createCart(body, body.case_ref));
+    res.status(201).json(await createCart(body, body.case_ref, body.merchant_id));
   }),
 );
 

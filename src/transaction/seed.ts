@@ -1,17 +1,24 @@
-// npm run seed: load data/catalog.json into the merchant tables. Safe to rerun: it upserts, resets every
-// variant to the file's price, stock, attributes and description, and removes rows not in the file.
+// npm run seed [-- data/catalog-tidewell.json]: load the catalog files (by default both: Stride & Co, retail, and
+// Tidewell Stays, travel) into the merchant tables. Safe to rerun: it upserts, resets every variant to the file's
+// price, stock, attributes, stay data and description, and removes rows not in the file.
+import { resolve } from 'node:path';
 import { closeDb, tx } from '../shared/db/pool';
-import { readCatalogFile } from './catalog';
+import { CATALOG_FILES, readCatalogFile } from './catalog';
 
 async function main(): Promise<void> {
-  const catalog = readCatalogFile();
+  const files = process.argv.slice(2).length ? process.argv.slice(2) : CATALOG_FILES;
+  for (const f of files) await seedOne(resolve(process.cwd(), f));
+}
+
+async function seedOne(path: string): Promise<void> {
+  const catalog = readCatalogFile(path);
   const m = catalog.merchant;
   const counts = await tx(async (c) => {
     await c.query(
-      `INSERT INTO merchants (id, name, currency, catalog_version, delivery_days) VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO merchants (id, name, currency, catalog_version, delivery_days, domain) VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, currency = EXCLUDED.currency,
-         catalog_version = EXCLUDED.catalog_version, delivery_days = EXCLUDED.delivery_days, updated_at = now()`,
-      [m.id, m.name, m.currency, catalog.catalog_version, m.delivery_days],
+         catalog_version = EXCLUDED.catalog_version, delivery_days = EXCLUDED.delivery_days, domain = EXCLUDED.domain, updated_at = now()`,
+      [m.id, m.name, m.currency, catalog.catalog_version, m.delivery_days, m.domain],
     );
     let variants = 0;
     for (const l of catalog.listings) {
@@ -22,11 +29,12 @@ async function main(): Promise<void> {
       );
       for (const v of l.variants) {
         await c.query(
-          `INSERT INTO merchant_variants (id, listing_id, size, unit_system, gender, price_value, currency, stock, description)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          `INSERT INTO merchant_variants (id, listing_id, size, unit_system, gender, price_value, currency, stock, description, stay)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
            ON CONFLICT (id) DO UPDATE SET size = EXCLUDED.size, unit_system = EXCLUDED.unit_system, gender = EXCLUDED.gender,
-             price_value = EXCLUDED.price_value, currency = EXCLUDED.currency, stock = EXCLUDED.stock, description = EXCLUDED.description`,
-          [v.id, l.id, v.attributes.size, v.attributes.unit_system, v.attributes.gender, v.price, m.currency, v.stock, v.description],
+             price_value = EXCLUDED.price_value, currency = EXCLUDED.currency, stock = EXCLUDED.stock, description = EXCLUDED.description,
+             stay = EXCLUDED.stay`,
+          [v.id, l.id, v.attributes.size, v.attributes.unit_system, v.attributes.gender, v.price, m.currency, v.stock, v.description, v.stay ? JSON.stringify(v.stay) : null],
         );
         variants++;
       }

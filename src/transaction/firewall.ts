@@ -1,4 +1,5 @@
 import type { MandateSpec } from '../authorization/mandate-spec';
+import type { LineAttrs } from './catalog';
 import { plural } from '../shared/words';
 import { sameMensSize, type UnitSystem } from './sizes';
 
@@ -30,9 +31,9 @@ export type FirewallLine = {
   category: string;
   quantity: number;
   unit_price_cents: number;
-  attributes: { size: string; unit_system: string | null; gender: string | null };
+  attributes: LineAttrs;
   /** Set when this line is the merchant's suggested substitute for a different variant. */
-  substituted_for?: { variant_id: string; listing_id: string };
+  substituted_for?: { variant_id: string; listing_id: string; hotel?: string; check_in?: string };
 };
 
 export type FirewallInput = {
@@ -58,13 +59,15 @@ function sizeCheck(want: MandateSpec['attributes'][number], line: FirewallLine):
       rule: 'attribute.size',
       status: 'UNVERIFIABLE',
       variant_id: line.variant_id,
-      detail: `mandate requires size ${wantText}; listing gives size ${have.size} with no size system`,
+      detail: `the instructions require size ${wantText}; listing gives size ${have.size ?? '(none)'} with no size system`,
     };
   }
+  if (!have.size) return { rule: 'attribute.size', status: 'UNVERIFIABLE', variant_id: line.variant_id, detail: `the instructions require size ${wantText}; listing gives no size` };
+  const size = have.size;
   const gender = want.gender ?? have.gender ?? 'men';
   let same: true | false | 'unknown';
-  if (want.unit_system === have.unit_system) same = Number(want.value) === Number(have.size);
-  else if (gender === 'men') same = sameMensSize({ size: want.value, unit_system: want.unit_system }, { size: have.size, unit_system: have.unit_system as UnitSystem });
+  if (want.unit_system === have.unit_system) same = Number(want.value) === Number(size);
+  else if (gender === 'men') same = sameMensSize({ size: want.value, unit_system: want.unit_system }, { size, unit_system: have.unit_system as UnitSystem });
   else same = 'unknown'; // only a men's conversion table exists
   if (same === true) return { rule: 'attribute.size', status: 'PASS', variant_id: line.variant_id, detail: `size ${have.unit_system} ${have.size} matches ${wantText}` };
   if (same === false) return { rule: 'attribute.size', status: 'VIOLATION', variant_id: line.variant_id, detail: `size ${have.unit_system} ${have.size} is not ${wantText}` };
@@ -73,9 +76,35 @@ function sizeCheck(want: MandateSpec['attributes'][number], line: FirewallLine):
 
 function genderCheck(wanted: string, line: FirewallLine, rule: string): Check {
   const have = line.attributes.gender;
-  if (!have) return { rule, status: 'UNVERIFIABLE', variant_id: line.variant_id, detail: `mandate requires ${wanted}; listing gives no gender` };
+  if (!have) return { rule, status: 'UNVERIFIABLE', variant_id: line.variant_id, detail: `the instructions require ${wanted}; listing gives no gender` };
   if (eq(have, wanted) || eq(have, 'unisex')) return { rule, status: 'PASS', variant_id: line.variant_id, detail: `gender ${have}` };
-  return { rule, status: 'VIOLATION', variant_id: line.variant_id, detail: `listing is ${have}, mandate requires ${wanted}` };
+  return { rule, status: 'VIOLATION', variant_id: line.variant_id, detail: `listing is ${have}, the instructions require ${wanted}` };
+}
+
+const fmtDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+/** A hotel rate against the stay in the instructions: city, exact dates, nights, minimum stars, refund policy. */
+function stayChecks(want: NonNullable<MandateSpec['stay']>, line: FirewallLine): Check[] {
+  const v = line.variant_id;
+  const have = line.attributes.stay;
+  if (!have) return [{ rule: 'stay', status: 'VIOLATION', variant_id: v, detail: 'the instructions are for a hotel stay; this item is not a hotel rate' }];
+  const out: Check[] = [];
+  const c = (rule: string, status: CheckStatus, detail: string) => out.push({ rule, status, variant_id: v, detail });
+  c('stay.city', eq(have.city, want.city) ? 'PASS' : 'VIOLATION', eq(have.city, want.city) ? `${have.hotel} is in ${have.city}` : `${have.hotel} is in ${have.city}; the instructions say ${want.city}`);
+  const sameDates = have.check_in === want.check_in && have.check_out === want.check_out;
+  c('stay.dates', sameDates ? 'PASS' : 'VIOLATION', sameDates ? `${fmtDay(have.check_in)} to ${fmtDay(have.check_out)}` : `rate is ${fmtDay(have.check_in)} to ${fmtDay(have.check_out)}; the instructions say ${fmtDay(want.check_in)} to ${fmtDay(want.check_out)}`);
+  c('stay.nights', have.nights === want.nights ? 'PASS' : 'VIOLATION', have.nights === want.nights ? `${plural(have.nights, 'night')}` : `${plural(have.nights, 'night')}; the instructions say ${want.nights}`);
+  if (want.min_stars) {
+    if (have.stars === null) c('stay.stars', 'UNVERIFIABLE', `the instructions require ${want.min_stars} stars or more; the rate gives no star rating`);
+    else c('stay.stars', have.stars >= want.min_stars ? 'PASS' : 'VIOLATION', have.stars >= want.min_stars ? `${have.stars} stars` : `${have.stars} stars; the instructions require ${want.min_stars} or more`);
+  }
+  if (want.refund_policy === 'REFUNDABLE') {
+    // Same pattern as a size with no size system: missing merchant data can't prove compliance, so it warns.
+    if (have.refund_policy === 'REFUNDABLE') c('stay.refund_policy', 'PASS', 'refundable rate');
+    else if (have.refund_policy === 'NON_REFUNDABLE') c('stay.refund_policy', 'VIOLATION', 'the rate is non-refundable; the instructions require refundable');
+    else c('stay.refund_policy', 'UNVERIFIABLE', 'the instructions require a refundable rate; the rate gives no refund policy');
+  }
+  return out;
 }
 
 export function runFirewall(input: FirewallInput): FirewallResult {
@@ -96,9 +125,11 @@ export function runFirewall(input: FirewallInput): FirewallResult {
   }
 
   // mandate state and time
-  add('mandate.status', input.mandate_status === 'ACTIVE', 'mandate is ACTIVE', `mandate is ${input.mandate_status}`);
-  add('mandate.expiry', now < input.expires_at, `mandate valid until ${input.expires_at.toISOString()}`, `mandate expired at ${input.expires_at.toISOString()}`);
-  if (merchant.delivery_days === null) {
+  add('mandate.status', input.mandate_status === 'ACTIVE', 'the instructions are ACTIVE', `the instructions are ${input.mandate_status}`);
+  add('mandate.expiry', now < input.expires_at, `instructions valid until ${input.expires_at.toISOString()}`, `instructions expired at ${input.expires_at.toISOString()}`);
+  if (spec.stay) {
+    // A stay has no delivery: its dates are checked per line instead.
+  } else if (merchant.delivery_days === null) {
     checks.push({ rule: 'deadline', status: 'UNVERIFIABLE', detail: `merchant gives no delivery estimate; deadline ${spec.deadline}` });
   } else {
     const eta = new Date(now.getTime() + merchant.delivery_days * 864e5).toISOString().slice(0, 10);
@@ -106,7 +137,7 @@ export function runFirewall(input: FirewallInput): FirewallResult {
   }
 
   // money
-  add('currency', cart.currency === ccy, `cart in ${ccy}`, `cart is in ${cart.currency}, mandate in ${ccy}`);
+  add('currency', cart.currency === ccy, `cart in ${ccy}`, `cart is in ${cart.currency}, the instructions in ${ccy}`);
   const maxCents = Math.round(Number(spec.max_total.value) * 100);
   const after = history.spent_cents + cart.total_cents;
   add(
@@ -117,16 +148,16 @@ export function runFirewall(input: FirewallInput): FirewallResult {
   );
 
   // orders and quantity
-  add('orders.max', history.orders_placed + 1 <= spec.max_orders, `order ${history.orders_placed + 1} of at most ${spec.max_orders}`, `${plural(history.orders_placed, 'order')} already placed; the mandate allows ${spec.max_orders}`);
+  add('orders.max', history.orders_placed + 1 <= spec.max_orders, `order ${history.orders_placed + 1} of at most ${spec.max_orders}`, `${plural(history.orders_placed, 'order')} already placed; the instructions allow ${spec.max_orders}`);
   add(
     'orders.split',
     spec.allow_split_orders || history.orders_placed === 0,
-    spec.allow_split_orders ? 'split orders allowed' : 'first order under this mandate',
-    'the mandate does not allow splitting the purchase across orders, and an order was already placed',
+    spec.allow_split_orders ? 'split orders allowed' : 'first order under these instructions',
+    'the instructions do not allow splitting the purchase across orders, and an order was already placed',
   );
   const units = cart.lines.reduce((n, l) => n + l.quantity, 0);
   const remaining = spec.quantity - history.units_bought;
-  add('quantity.max', units <= remaining, `${plural(units, 'unit')}, ${remaining} remaining under the mandate`, `${plural(units, 'unit')} in the cart, only ${remaining} remaining under the mandate`);
+  add('quantity.max', units <= remaining, `${plural(units, 'unit')}, ${remaining} remaining under the instructions`, `${plural(units, 'unit')} in the cart, only ${remaining} remaining under the instructions`);
   if (units < remaining && !spec.allow_split_orders) {
     checks.push({ rule: 'quantity.partial', status: 'WARNING', detail: `${units} of ${plural(remaining, 'unit')}; split orders are not allowed, so the rest can't be bought later` });
   }
@@ -145,15 +176,18 @@ export function runFirewall(input: FirewallInput): FirewallResult {
     if (spec.brands_allowed.length) {
       push('brand.allowlist', spec.brands_allowed.some((b) => eq(b, line.brand)), `${line.brand} is allowed`, `${line.brand} is not in ${spec.brands_allowed.join(', ')}`);
     }
-    push('category', eq(line.category, spec.category) || line.category.toLowerCase().includes(spec.category.toLowerCase()), `category ${line.category}`, `category ${line.category}, mandate is for ${spec.category}`);
+    push('category', eq(line.category, spec.category) || line.category.toLowerCase().includes(spec.category.toLowerCase()), `category ${line.category}`, `category ${line.category}; the instructions are for ${spec.category}`);
     if (line.substituted_for) {
-      const otherProduct = line.substituted_for.listing_id !== line.listing_id;
+      // Another rate of the same hotel for the same dates is the same stay, as another variant is the same product.
+      const sameStay = Boolean(line.attributes.stay && line.substituted_for.hotel && eq(line.attributes.stay.hotel, line.substituted_for.hotel) && line.substituted_for.check_in === line.attributes.stay.check_in);
+      const otherProduct = line.substituted_for.listing_id !== line.listing_id && !sameStay;
       if (!otherProduct) {
-        checks.push({ rule: 'substitution', status: 'PASS', variant_id: v, detail: `merchant suggested another variant of the same product (${line.substituted_for.variant_id}); not a substitution` });
+        checks.push({ rule: 'substitution', status: 'PASS', variant_id: v, detail: sameStay ? `merchant suggested another rate of the same hotel for the same dates; not a substitution` : `merchant suggested another variant of the same product (${line.substituted_for.variant_id}); not a substitution` });
       } else {
-        push('substitution', spec.allow_substitutions, 'substitute product accepted; the mandate allows substitutions', `merchant substituted a different product for ${line.substituted_for.variant_id}; the mandate does not allow substitutions`);
+        push('substitution', spec.allow_substitutions, 'substitute product accepted; the instructions allow substitutions', `merchant substituted a different product for ${line.substituted_for.variant_id}; the instructions do not allow substitutions`);
       }
     }
+    if (spec.stay) checks.push(...stayChecks(spec.stay, line));
     for (const a of spec.attributes) {
       if (a.name === 'size') {
         checks.push(sizeCheck(a, line));
@@ -161,7 +195,7 @@ export function runFirewall(input: FirewallInput): FirewallResult {
       } else if (a.name === 'gender') {
         checks.push(genderCheck(a.value, line, 'attribute.gender'));
       } else {
-        checks.push({ rule: `attribute.${a.name}`, status: 'UNVERIFIABLE', variant_id: v, detail: `listing has no structured ${a.name}; mandate requires ${a.value}` });
+        checks.push({ rule: `attribute.${a.name}`, status: 'UNVERIFIABLE', variant_id: v, detail: `listing has no structured ${a.name}; the instructions require ${a.value}` });
       }
     }
   }

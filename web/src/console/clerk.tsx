@@ -134,7 +134,7 @@ function tools(studio: AgStudioApi<any>) {
     studio.defineAiTool({
       name: 'get_case',
       description: 'One case in detail: the decision (field ruling), violated clauses of the buyer instructions (field mandate), cited recorder steps, counterfactual, reasoning, flagged evidence and settlement actions with PayPal ids.',
-      params: (s) => s.object({ case_ref: s.string({ description: 'Case reference like CASE-20261110-175E2257, or a case id.' }) }),
+      params: (s) => s.object({ case_ref: s.string({ description: 'Case reference like CASE-20261120-1A2B3C4D, or a case id.' }) }),
       execute: async (args: any, ctx) => {
         const row = await findCaseId(args.case_ref);
         if (!row) return ctx.error(`No case ${args.case_ref}.`);
@@ -214,7 +214,7 @@ function tools(studio: AgStudioApi<any>) {
   ];
 }
 
-const INSTRUCTIONS = `You are the Clerk in the Recourse console. Recourse decides who is responsible when an AI shopping agent's purchase goes wrong, and settles it on PayPal within limits the operator agreed to.
+const INSTRUCTIONS = `You are the Clerk in the Recourse console. Recourse decides who is responsible when an AI agent's purchase or booking goes wrong, and settles it on PayPal within limits the operator agreed to.
 
 You answer questions about cases, decisions, settlements, reputation and the scorecard, using only your tools. Always call a tool before answering with numbers; never estimate or invent a figure, id or case.
 

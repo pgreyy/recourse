@@ -21,7 +21,8 @@ export function AgentRun() {
   const [err, setErr] = useState<Error | null>(null);
 
   const active = (mandates.data ?? []).filter((m) => m.status === 'ACTIVE');
-  const avId = av || versions.data?.[0]?.agent_version_id || '';
+  // Default to the travel demo's fast agent, the one the walkthrough uses.
+  const avId = av || versions.data?.find((v) => v.name === 'Wayfare Booker' && v.version === '1.3')?.agent_version_id || versions.data?.[0]?.agent_version_id || '';
   const mId = mandate || active[0]?.id || '';
 
   async function start() {

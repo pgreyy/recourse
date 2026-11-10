@@ -1,6 +1,7 @@
 import type pg from 'pg';
 import { canonicalHash } from '../shared/crypto/canonical';
 import { db } from '../shared/db/pool';
+import type { LineAttrs } from '../transaction/catalog';
 
 /**
  * A catalog snapshot is everything the merchant showed at a moment: every listing and variant with
@@ -20,7 +21,7 @@ export type Snapshot = {
     description: string;
     variants: Array<{
       variant_id: string;
-      attributes: { size: string; unit_system: string | null; gender: string | null };
+      attributes: LineAttrs;
       price: { currency_code: string; value: string };
       stock: number;
       description: string;
@@ -36,7 +37,7 @@ export async function buildSnapshot(merchantId: string, c: pg.Pool | pg.PoolClie
   if (!m.rows[0]) throw new Error(`merchant ${merchantId} is not seeded`);
   const listings = await c.query('SELECT id, name, brand, category, description FROM merchant_listings WHERE merchant_id = $1 ORDER BY id', [merchantId]);
   const variants = await c.query(
-    `SELECT v.id, v.listing_id, v.size, v.unit_system, v.gender, v.price_value::text AS price, v.currency, v.stock, v.description
+    `SELECT v.id, v.listing_id, v.size, v.unit_system, v.gender, v.price_value::text AS price, v.currency, v.stock, v.description, v.stay
      FROM merchant_variants v JOIN merchant_listings l ON l.id = v.listing_id WHERE l.merchant_id = $1 ORDER BY v.id`,
     [merchantId],
   );
@@ -54,7 +55,8 @@ export async function buildSnapshot(merchantId: string, c: pg.Pool | pg.PoolClie
         .filter((v) => v.listing_id === l.id)
         .map((v) => ({
           variant_id: v.id,
-          attributes: { size: v.size, unit_system: v.unit_system, gender: v.gender },
+          // stay only for travel rates, so retail snapshots keep exactly their earlier shape (and hashes)
+          attributes: v.stay ? { size: v.size, unit_system: v.unit_system, gender: v.gender, stay: v.stay } : { size: v.size, unit_system: v.unit_system, gender: v.gender },
           price: { currency_code: v.currency.trim(), value: v.price },
           stock: v.stock,
           description: v.description,

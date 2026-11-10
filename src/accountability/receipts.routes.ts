@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { route } from '../shared/http/errors';
-import { confirmReceipt, loadReceipt, parseReceiptToken, reportIssue, type ReceiptView } from './receipts';
+import { confirmReceipt, loadReceipt, parseReceiptToken, reportIssue, requestCancellation, type ReceiptView } from './receipts';
 
 export const receipts = Router();
 
@@ -55,10 +55,19 @@ header .wm{font:600 21px/1 'Fraunces',Georgia,serif;letter-spacing:-.01em}`;
 
 function page(r: NonNullable<ReceiptView>, token: string, notice?: string): string {
   const st = STATUS[r.compliance as keyof typeof STATUS];
-  const spec = r.spec as { category: string; max_total: { value: string; currency: string }; deadline: string };
-  const lines = r.lines as Array<{ name: string; quantity: number; price: string; attributes: { size: string; unit_system: string | null; gender: string | null } }>;
+  const spec = r.spec as { category: string; max_total: { value: string; currency: string }; deadline: string; stay?: { city: string; check_in: string; check_out: string; nights: number; min_stars: number | null; refund_policy: string | null } };
+  const lines = r.lines as Array<{ name: string; quantity: number; price: string; attributes: { size: string | null; unit_system: string | null; gender: string | null; stay?: { city: string; check_in: string; check_out: string; nights: number; stars: number | null; refund_policy: string | null } } }>;
   const when = r.captured_at ? new Date(r.captured_at).toUTCString() : '';
   const reported = r.cases.length > 0;
+  const booking = Boolean(spec.stay);
+  const cancel = r.cancellation as { kind: string; reason?: string; refund_id?: string; amount?: { value: string; currency: string } } | null;
+  const asked = spec.stay
+    ? `hotel stay in ${spec.stay.city}, ${spec.stay.check_in} to ${spec.stay.check_out} (${spec.stay.nights} nights)${spec.stay.min_stars ? `, ${spec.stay.min_stars} stars or more` : ''}${spec.stay.refund_policy === 'REFUNDABLE' ? ', refundable' : ''}, up to ${spec.max_total.value} ${spec.max_total.currency} in total`
+    : `${spec.category}, up to ${spec.max_total.value} ${spec.max_total.currency} in total, by ${spec.deadline}`;
+  const lineText = (l: (typeof lines)[number]) =>
+    l.attributes.stay
+      ? `${esc(l.name)}: ${esc(l.attributes.stay.city)}, ${esc(l.attributes.stay.check_in)} to ${esc(l.attributes.stay.check_out)} (${l.attributes.stay.nights} nights)${l.attributes.stay.stars ? `, ${l.attributes.stay.stars} stars` : ''}, ${l.attributes.stay.refund_policy === 'REFUNDABLE' ? 'refundable' : l.attributes.stay.refund_policy === 'NON_REFUNDABLE' ? 'non-refundable' : 'no refund policy given'}, ${esc(l.price)} ${esc(r.currency)}`
+      : `${esc(l.quantity)} × ${esc(l.name)}, size ${esc(l.attributes.size ?? '')} ${l.attributes.unit_system ? esc(l.attributes.unit_system) : '(no size system given)'}${l.attributes.gender ? `, ${esc(l.attributes.gender)}'s` : ''}, ${esc(l.price)} ${esc(r.currency)}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Purchase receipt</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpolygon points='16.00,0.60 17.84,2.02 19.99,1.12 21.40,2.97 23.70,2.66 24.58,4.81 26.89,5.11 27.19,7.42 29.34,8.30 29.03,10.60 30.88,12.01 29.98,14.16 31.40,16.00 29.98,17.84 30.88,19.99 29.03,21.40 29.34,23.70 27.19,24.58 26.89,26.89 24.58,27.19 23.70,29.34 21.40,29.03 19.99,30.88 17.84,29.98 16.00,31.40 14.16,29.98 12.01,30.88 10.60,29.03 8.30,29.34 7.42,27.19 5.11,26.89 4.81,24.58 2.66,23.70 2.97,21.40 1.12,19.99 2.02,17.84 0.60,16.00 2.02,14.16 1.12,12.01 2.97,10.60 2.66,8.30 4.81,7.42 5.11,5.11 7.42,4.81 8.30,2.66 10.60,2.97 12.01,1.12 14.16,2.02' fill='%230b4f4a' stroke='%230b4f4a' stroke-width='.8' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='16' r='11.6' fill='none' stroke='%23f6f3ec' stroke-width='1.2' stroke-opacity='.6'/%3E%3Cpath d='M11.6 13.3h6.5a3.85 3.85 0 0 1 0 7.7h-5.1' fill='none' stroke='%23f6f3ec' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M14.6 10.3 11.6 13.3l3 3' fill='none' stroke='%23f6f3ec' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -101,26 +110,28 @@ ${notice ? `<p class="notice" role="status">${esc(notice)}</p>` : ''}
 <article class="sheet">
 <section class="sec"><h2>Compliance</h2><span class="badge ${st.cls}">${esc(st.label)}</span><p class="muted">${esc(st.text)}</p></section>
 <section class="sec"><h2>What you asked for</h2><p class="quote">${esc(r.source_text)}</p>
-<p class="muted">Instructions v${esc(r.mandate_version)}: ${esc(spec.category)}, up to ${esc(spec.max_total.value)} ${esc(spec.max_total.currency)} in total, by ${esc(spec.deadline)}</p></section>
-<section class="sec"><h2>What was bought</h2><ul>${lines
-    .map((l) => `<li>${esc(l.quantity)} × ${esc(l.name)}, size ${esc(l.attributes.size)} ${l.attributes.unit_system ? esc(l.attributes.unit_system) : '(no size system given)'}${l.attributes.gender ? `, ${esc(l.attributes.gender)}'s` : ''}, ${esc(l.price)} ${esc(r.currency)}</li>`)
-    .join('')}</ul><p>Total <strong class="amt">${esc(r.total)} ${esc(r.currency)}</strong> from ${esc(r.merchant_name)}</p></section>
+<p class="muted">Instructions v${esc(r.mandate_version)}: ${esc(asked)}</p></section>
+<section class="sec"><h2>${booking ? 'What was booked' : 'What was bought'}</h2><ul>${lines.map((l) => `<li>${lineText(l)}</li>`).join('')}</ul><p>Total <strong class="amt">${esc(r.total)} ${esc(r.currency)}</strong> from ${esc(r.merchant_name)}</p></section>
 <section class="sec"><h2>Differences</h2>${
     r.differences.length ? `<ul>${r.differences.map((d: string) => `<li class="warn">${esc(d)}</li>`).join('')}</ul>` : '<p class="ok">None found.</p>'
   }${r.matches.length ? `<p class="muted">Matches: ${esc(r.matches.join('; '))}</p>` : ''}</section>
-<section class="sec"><h2>Payment</h2><dl><dt>PayPal transaction</dt><dd>${esc(r.paypal_capture_id)}</dd><dt>PayPal order</dt><dd>${esc(r.paypal_order_id)}</dd><dt>Reference</dt><dd>${esc(r.order_ref)}</dd><dt>Time</dt><dd>${esc(when)}</dd></dl></section>
+<section class="sec"><h2>Payment</h2><dl><dt>PayPal transaction</dt><dd>${esc(r.paypal_capture_id)}</dd><dt>PayPal order</dt><dd>${esc(r.paypal_order_id)}</dd><dt>Reference</dt><dd>${esc(r.order_ref)}</dd>${r.booking_ref ? `<dt>Booking confirmation</dt><dd>${esc(r.booking_ref)}</dd>` : ''}<dt>Time</dt><dd>${esc(when)}</dd></dl></section>
 <section class="sec">
 ${
   r.receipt_status === 'PENDING' && !reported
-    ? `<form method="post" action="/r/${esc(token)}/confirm"><button class="primary" type="submit">Confirm purchase</button></form>`
+    ? `<form method="post" action="/r/${esc(token)}/confirm"><button class="primary" type="submit">${booking ? 'Confirm booking' : 'Confirm purchase'}</button></form>`
     : r.receipt_status === 'CONFIRMED'
-      ? `<p class="ok">You confirmed this purchase on ${esc(new Date(r.confirmed_at).toUTCString())}.</p>`
+      ? `<p class="ok">You confirmed this ${booking ? 'booking' : 'purchase'} on ${esc(new Date(r.confirmed_at).toUTCString())}.</p>`
       : ''
 }
 ${
   reported
     ? `${caseLine(r.cases[r.cases.length - 1])}<p class="muted"><a href="/app/console?page=case&amp;case=${esc(r.cases[r.cases.length - 1].id)}">View this case in the console</a></p>`
-    : `<form method="post" action="/r/${esc(token)}/report"><label for="desc">What is wrong? (optional)</label><textarea id="desc" name="description"></textarea><button class="secondary" type="submit">Report an issue</button></form>`
+    : booking && !cancel
+      ? `<form method="post" action="/r/${esc(token)}/cancel"><button class="secondary" type="submit">Request cancellation</button></form>`
+      : booking && cancel?.kind === 'merchant.cancellation.refunded'
+        ? `<p class="ok">Cancelled. ${esc(r.merchant_name)} refunded ${esc(cancel.amount?.value ?? '')} ${esc(cancel.amount?.currency ?? '')} on PayPal${cancel.refund_id ? ` (refund ${esc(cancel.refund_id)})` : ''}.</p>`
+        : `${booking && cancel ? `<p class="warn">${esc(r.merchant_name)} can't cancel this rate: ${esc(cancel.reason ?? '')}.</p>` : ''}<form method="post" action="/r/${esc(token)}/report"><label for="desc">${booking ? 'Not what you asked for? Report an issue (optional note)' : 'What is wrong? (optional)'}</label><textarea id="desc" name="description"></textarea><button class="secondary" type="submit">Report an issue</button></form>`
 }
 <p class="muted">Confirming is not a waiver of your PayPal dispute rights.</p>
 </section>
@@ -157,6 +168,18 @@ receipts.post(
     const r = await confirmReceipt(id);
     if (req.accepts(['html', 'json']) === 'json') return res.json(r);
     res.type('html').send(page(r!, req.params.token, 'Thank you. Your confirmation is signed and recorded.'));
+  }),
+);
+
+receipts.post(
+  '/:token/cancel',
+  route(async (req, res) => {
+    const id = parseReceiptToken(req.params.token);
+    if (!id || !(await loadReceipt(id))) return notFound(res);
+    const r = await requestCancellation(id);
+    if (req.accepts(['html', 'json']) === 'json') return res.json(r);
+    const refused = (r?.cancellation as { kind?: string } | null)?.kind === 'merchant.cancellation.refused';
+    res.type('html').send(page(r!, req.params.token, refused ? 'Cancellation refused by the merchant. You can report an issue below.' : 'Cancellation requested.'));
   }),
 );
 

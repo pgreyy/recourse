@@ -9,7 +9,7 @@ import {
 import { canonicalHash } from '../shared/crypto/canonical';
 import { checkDocument, loadSigner, signDocument } from '../shared/crypto/signing';
 import { HttpError } from '../shared/http/errors';
-import { DEMO_MERCHANT } from '../transaction/catalog';
+import { DEMO_MERCHANT, MERCHANT_NAMES } from '../transaction/catalog';
 
 const Money = z.object({
   value: z
@@ -24,6 +24,7 @@ const Money = z.object({
 export const AgreementRequest = z
   .object({
     covered_agent_version_ids: z.array(z.string().uuid()).optional(),
+    merchant_ids: z.array(z.string().trim().min(1)).min(1).default([DEMO_MERCHANT.id]),
     categories: z.array(z.string().trim().toLowerCase().min(1)).min(1).default(['running shoes']),
     per_incident_cap: Money.default({ value: '150.00', currency: 'USD' }),
     aggregate_cap: Money.default({ value: '500.00', currency: 'USD' }),
@@ -78,7 +79,7 @@ export async function buildTerms(c: pg.PoolClient, op: Operator, version: number
     agreement_version: version,
     operator: { id: op.id, name: op.name, email: op.email },
     covered_agent_versions: versions.rows,
-    covered_merchants: [DEMO_MERCHANT],
+    covered_merchants: req.merchant_ids.map((id) => ({ id, name: MERCHANT_NAMES[id] ?? id })),
     categories: req.categories,
     per_incident_cap: req.per_incident_cap,
     aggregate_cap: req.aggregate_cap,
@@ -87,7 +88,7 @@ export async function buildTerms(c: pg.PoolClient, op: Operator, version: number
     appeal_window_hours: req.appeal_window_hours,
     revocation_terms: REVOCATION_TERMS,
     payment_terms:
-      'After accepting, the operator saves a PayPal payment method under this agreement. Recourse may charge it, payer not present, only to settle a final agent-fault ruling (after the appeal window), up to per_incident_cap per incident and aggregate_cap in total.',
+      'After accepting, the operator saves a PayPal payment method under this agreement. Recourse may charge it, payer not present, only to settle a final agent-fault decision (after the operator accepts it or the appeal window closes), up to the per-incident cap per incident and the total cap overall.',
     disclosure: SANDBOX_DISCLOSURE,
   };
 }

@@ -4,7 +4,7 @@ import { api, Link, useLoad, Notice, BackButton } from '../lib';
 type Login = { email: string; password: string | null } | null;
 type JudgeInfo = { buyer: Login; operator: Login; limits: { ai_calls: { limit: number; used: number; remaining: number }; agent_runs_per_ip_per_hour: number } };
 
-const MANDATE = "Running shoes, US men's 10, under $120, Kestrel or Sorin, by Friday";
+const INSTRUCTIONS = 'Refundable hotel in Lisbon, Nov 20 to 22, under $400 total, 4 stars or more';
 
 export function Judges() {
   const j = useLoad(() => api<JudgeInfo>('/console/judges'), []);
@@ -45,57 +45,50 @@ export function Judges() {
           title="Scenario A: the agent's fault, recovered from its operator (about 6 minutes)"
           steps={[
             <>
-              <Link to="/buyer">Buyer</Link>: keep the text <q>{MANDATE}</q>, enter any email, <b>Compile rules</b>. Compare your words with the compiled rules, then{' '}
+              <Link to="/buyer">Buyer</Link>: keep the text <q>{INSTRUCTIONS}</q>, enter any email, <b>Compile rules</b>. Compare your words with the compiled rules, then{' '}
               <b>Approve with PayPal</b> and log in as the sandbox buyer. You come back to signed, active instructions.
             </>,
             <>
-              <Link to="/agent">Agent run</Link>: pick <b>Acme Shopper v1.3 (fast)</b> and your instructions, <b>Run agent</b>. Watch the timeline: the cart is out of stock,{' '}
-              the merchant suggests a substitute (size 10 with no size system), the agent accepts it, then a <b>Firewall warning</b> and <b>Checkout went ahead despite the warning</b>. It ends with the PayPal
-              order and capture ids and <b>Decision trail anchored in the PayPal order</b>.
+              <Link to="/agent">Agent run</Link>: pick <b>Wayfare Booker v1.3 (fast)</b> and your instructions, <b>Run agent</b>. Watch the timeline: the refundable rate
+              at Casa Lumen is sold out, Tidewell Stays suggests its <b>Flexible Saver</b> rate (no refund policy given), the agent accepts it, then a{' '}
+              <b>Firewall warning</b> and <b>Checkout went ahead despite the warning</b>. It ends with the PayPal order and capture ids, the booking confirmation and{' '}
+              <b>Decision trail anchored in the PayPal order</b>.
             </>,
             <>
-              <b>Open the receipt</b> (on the same screen) and <b>Report an issue</b>: <q>These are UK sizing, I asked for US 10.</q>
+              <b>Open the receipt</b> (on the same screen): the differences show the missing refund policy and the description's <q>Non-refundable after booking</q>.{' '}
+              <b>Request cancellation</b>: Tidewell Stays refuses. Then <b>Report an issue</b>: <q>I asked for a refundable hotel. This rate can't be cancelled.</q>
             </>,
             <>
-              <Link to="/console?page=cases">Console, Cases</Link>: open the new case, <b>Assess</b> (about 30 seconds). Read the three columns: what was
-              authorised, what happened (warned at one step, proceeded at the next, the in-stock compliant alternative from the frozen catalog snapshot), and the
-              conclusion, each check tagged Code or AI.
+              <Link to="/console?page=cases">Console, Cases</Link>: open the new case, <b>Assess</b> (about 30 seconds). Read the three columns: what was authorised,
+              what happened (warned at one step, went ahead at the next, and the refundable rate that was available, from the frozen catalog snapshot), and the
+              conclusion with <b>Why not the others</b>, each line tagged Code or AI.
             </>,
             <>
-              <b>Approve decision</b> (your name and email), then <b>Operator accepts</b>, then <b>Run settlement</b> in the settlement panel: the buyer is refunded
-              and the operator's saved PayPal is charged, with real PayPal ids. Press <b>Check with PayPal</b> until both say Confirmed: only then does it say
-              Recovered.
+              <b>Approve decision</b> (your name and email). Open <b>Operator's view of this decision</b> and <b>Accept</b> as Wayfare Agents, then back on the case{' '}
+              <b>Run settlement</b>: the buyer is refunded and the operator's saved PayPal is charged, with real PayPal ids. Press <b>Check with PayPal</b> until both
+              say Confirmed: only then does it say Recovered, and <b>Who paid what</b> appears.
             </>,
             <>
-              <Link to="/console?page=agents">Agents and operators</Link>: Acme Shopper v1.3 is now on <b>Step-up</b> (recent confirmed agent fault): its next
-              purchase needs the buyer's approval.
+              <Link to="/console?page=agents">Agents and operators</Link>: Wayfare Booker v1.3 is now on <b>Step-up</b> (recent confirmed agent fault): its next booking
+              needs the buyer's approval.
             </>,
           ]}
         />
 
         <Scenario
           id="b"
-          title="Scenario B: a PayPal dispute that is buyer's remorse (about 10 minutes)"
+          title="Scenario B: the careful agent, and no case (about 4 minutes)"
           steps={[
             <>
-              <Link to="/buyer">Buyer</Link>: compile and approve new instructions (one order per set; the same text works).
+              <Link to="/buyer">Buyer</Link>: compile and approve new instructions with the same text (one booking per set of instructions).
             </>,
             <>
-              <Link to="/agent">Agent run</Link>: pick <b>Acme Shopper v2.0 (careful)</b>. It buys the compliant Sorin Cloudline US 10; the firewall passes.
+              <Link to="/agent">Agent run</Link>: pick <b>Wayfare Booker v2.0 (careful)</b>. It refuses the Flexible Saver because it has no refund policy, and books{' '}
+              <b>Hotel Ribeira Alta, Refundable rate</b> at 380.00 USD; the firewall passes.
             </>,
             <>
-              Open <a href="https://www.sandbox.paypal.com" target="_blank" rel="noreferrer">sandbox.paypal.com</a> as the sandbox buyer, find the Stride &amp; Co
-              payment in Activity, <b>Report a problem</b> and open a dispute (for example, item not as described: <q>they arrived as ordered but don't feel
-              right</q>).
-            </>,
-            <>
-              PayPal's webhook opens a case on its own: refresh <Link to="/console?page=cases">Cases</Link>. <b>Assess</b>: buyer's remorse, no clause broken,
-              citing the compliant purchase and your own words in the dispute.
-            </>,
-            <>
-              <b>Approve decision</b>, then <b>Run settlement</b>: Recourse escalates the dispute and, once PayPal offers it (a few minutes later), <b>Run
-              settlement</b> again files a two page evidence PDF with PayPal. The panel shows PayPal's live dispute status; the sandbox does not decide disputes, so
-              it stays under review.
+              <b>Open the receipt</b>: Compliant, no differences. Optionally <b>Request cancellation</b>: the rate is refundable, so Tidewell Stays cancels it and refunds
+              you on PayPal. No case is needed.
             </>,
           ]}
         />
@@ -108,12 +101,12 @@ export function Judges() {
               refund a case: it cannot move money, and it states refunds and charges only from the settlement records, with their PayPal ids.
             </li>
             <li>
-              <b>Operator onboarding</b> (<Link to="/operator">open it</Link>): Drift Commerce has no accepted agreement, so its agent needs the buyer's approval on
-              every purchase.
+              <b>Operator onboarding</b> (<Link to="/operator">open it</Link>): Drift Commerce has no accepted agreement, so its agent, Drift Booker, needs the
+              buyer's approval at PayPal for every booking.
             </li>
             <li>
-              <b>Scorecard</b> (<Link to="/console?page=scorecard">open it</Link>): the assessment pipeline on 24 fixed cases, including how often it wrongly blames an
-              agent (0 so far).
+              <b>Scorecard</b> (<Link to="/console?page=scorecard">open it</Link>): an internal, labelled set of retail and travel cases with known answers, run
+              through the same assessment pipeline, including how often it wrongly blames an agent. It shows behaviour on known cases, not production accuracy.
             </li>
           </ul>
         </section>

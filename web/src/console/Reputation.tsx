@@ -1,7 +1,10 @@
-import { api, ErrorNote, money, Policy, Status, useLoad, when, plural } from '../lib';
+import { api, ErrorNote, money, navigate, Policy, Status, useLoad, when, plural } from '../lib';
 
 export function Reputation() {
   const r = useLoad((signal) => api<{ agents: any[]; operators: any[] }>('/console/agents', { signal }), []);
+  // Decisions per operator, each linking to the operator's view of it.
+  const cases = useLoad((signal) => api<any[]>('/console/cases', { signal }), []);
+  const decisionsOf = (name: string) => (cases.data ?? []).filter((c) => c.operator === name && c.verdict_state === 'RULED');
   return (
     <div className="w stack" style={{ gap: 16 }}>
       <ErrorNote error={r.error} />
@@ -65,6 +68,7 @@ export function Reputation() {
                   <th>Basis</th>
                   <th>Outstanding</th>
                   <th>Agreement</th>
+                  <th>Decisions</th>
                 </tr>
               </thead>
               <tbody>
@@ -90,6 +94,22 @@ export function Reputation() {
                       ) : (
                         <Status tone="warn">No accepted agreement</Status>
                       )}
+                    </td>
+                    <td className="small">
+                      {decisionsOf(o.operator.name).length === 0 && <span className="muted">None</span>}
+                      {decisionsOf(o.operator.name).map((c) => (
+                        <div key={c.id}>
+                          <a
+                            href={`/app/operator/decision?case=${c.id}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigate(`/operator/decision?case=${c.id}`);
+                            }}
+                          >
+                            <span className="mono">{c.case_ref}</span>
+                          </a>
+                        </div>
+                      ))}
                     </td>
                   </tr>
                 ))}

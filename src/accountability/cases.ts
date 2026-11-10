@@ -166,7 +166,8 @@ export async function caseEvidence(cs: CaseRow) {
   const cf = counterfactual(m);
   const facts = decisionFacts(m);
   const { pack, hash, flags } = buildEvidencePack(m, checks, cf, facts);
-  return { case_id: cs.id, case_ref: cs.case_ref, evidence_pack_hash: hash, code_checks: checks, decision_facts: facts, counterfactual: cf, injection_flags: dedupeFlags(flags), evidence_pack: pack };
+  const { whyNotOthers } = await import('./why-not');
+  return { case_id: cs.id, case_ref: cs.case_ref, evidence_pack_hash: hash, code_checks: checks, decision_facts: facts, counterfactual: cf, injection_flags: dedupeFlags(flags), why_not: whyNotOthers(m, checks, cf), evidence_pack: pack };
 }
 
 export async function caseVerify(cs: CaseRow) {

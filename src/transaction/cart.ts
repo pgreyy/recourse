@@ -1,4 +1,4 @@
-import type { VariantView } from './catalog';
+import type { LineAttrs, VariantView } from './catalog';
 
 /**
  * Cart validation in the shape of PayPal's Store Sync Cart API (PayPalCart / ValidationIssue in
@@ -8,7 +8,7 @@ import type { VariantView } from './catalog';
 
 export type RequestedItem = { variant_id: string; quantity: number };
 type Money = { currency_code: string; value: string };
-type Attrs = { size: string; unit_system: string | null; gender: string | null };
+type Attrs = LineAttrs;
 
 export type ValidationIssue = {
   code: 'INVENTORY_ISSUE' | 'DATA_ERROR';
@@ -52,13 +52,24 @@ export type CartState = {
   validation_issues: ValidationIssue[];
 };
 
-const attrsOf = (v: VariantView): Attrs => ({ size: v.size, unit_system: v.unit_system, gender: v.gender });
+const attrsOf = (v: VariantView): Attrs => (v.stay ? { size: v.size, unit_system: v.unit_system, gender: v.gender, stay: v.stay } : { size: v.size, unit_system: v.unit_system, gender: v.gender });
 const selected = (v: VariantView) =>
-  [
-    { name: 'size', value: v.size },
-    v.unit_system ? { name: 'unit_system', value: v.unit_system } : null,
-    v.gender ? { name: 'gender', value: v.gender } : null,
-  ].filter((a): a is { name: string; value: string } => a !== null);
+  (v.stay
+    ? [
+        { name: 'hotel', value: v.stay.hotel },
+        v.stay.stars !== null ? { name: 'stars', value: String(v.stay.stars) } : null,
+        { name: 'city', value: v.stay.city },
+        { name: 'check_in', value: v.stay.check_in },
+        { name: 'check_out', value: v.stay.check_out },
+        { name: 'nights', value: String(v.stay.nights) },
+        v.stay.refund_policy ? { name: 'refund_policy', value: v.stay.refund_policy } : null,
+      ]
+    : [
+        v.size ? { name: 'size', value: v.size } : null,
+        v.unit_system ? { name: 'unit_system', value: v.unit_system } : null,
+        v.gender ? { name: 'gender', value: v.gender } : null,
+      ]
+  ).filter((a): a is { name: string; value: string } => a !== null);
 
 /**
  * What this merchant offers when a variant can't be supplied: same listing, same size NUMBER, same
@@ -67,6 +78,13 @@ const selected = (v: VariantView) =>
  * below calls both of them "size 10".
  */
 export function findSubstitute(wanted: VariantView, quantity: number, all: Iterable<VariantView>): VariantView | undefined {
+  if (wanted.stay) {
+    // A hotel's fallback: another rate of the same hotel for the same dates, no dearer, with rooms left.
+    for (const v of all) {
+      if (v.variant_id !== wanted.variant_id && v.stay && v.stay.hotel === wanted.stay.hotel && v.stay.check_in === wanted.stay.check_in && v.stay.check_out === wanted.stay.check_out && Number(v.price) <= Number(wanted.price) && v.stock >= quantity) return v;
+    }
+    return undefined;
+  }
   for (const v of all) {
     if (
       v.variant_id !== wanted.variant_id &&
@@ -119,6 +137,42 @@ export function computeCart(requested: RequestedItem[], variants: Map<string, Va
     }
     const outOfStock = v.stock === 0;
     const sub = findSubstitute(v, item.quantity, variants.values());
+    if (v.stay) {
+      const dates = `${v.stay.check_in} to ${v.stay.check_out}`;
+      const issue: ValidationIssue = {
+        code: 'INVENTORY_ISSUE',
+        type: 'BUSINESS_RULE',
+        item_id: v.listing_id,
+        field: `items[${i}]`,
+        message: `${v.name} is sold out for ${dates}.${sub ? ` ${sub.name} is available for the same dates at ${sub.price}.` : ''}`,
+        user_message: `Sorry, ${v.name} is sold out for these dates.${sub ? ` ${sub.name} is available instead.` : ''}`,
+        context: {
+          specific_issue: 'ITEM_OUT_OF_STOCK',
+          item_id: v.listing_id,
+          variant_id: v.variant_id,
+          available_quantity: v.stock,
+          requested_quantity: item.quantity,
+          ...(sub ? { suggested_alternatives: [sub.variant_id] } : {}),
+        },
+        resolution_options: [
+          ...(sub ? [{ action: 'SUGGEST_ALTERNATIVE', label: `Switch to ${sub.name}`, metadata: { cost_impact: (Number(sub.price) - Number(v.price)).toFixed(2), priority: 'HIGH', auto_applicable: true } }] : []),
+          { action: 'REMOVE_ITEM', label: 'Remove this rate' },
+        ],
+      };
+      if (sub) {
+        issue.suggested_substitute = {
+          variant_id: sub.variant_id,
+          item_id: sub.listing_id,
+          name: sub.name,
+          description: sub.name,
+          price: { currency_code: sub.currency, value: sub.price },
+          attributes: attrsOf(sub),
+          selected_attributes: selected(sub),
+        };
+      }
+      issues.push(issue);
+      return;
+    }
     const issue: ValidationIssue = {
       code: 'INVENTORY_ISSUE',
       type: 'BUSINESS_RULE',

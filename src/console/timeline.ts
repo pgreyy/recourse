@@ -1,6 +1,7 @@
 import type { RecorderEntry } from '../evidence/recorder';
 import { fixPlural, instructionWords, plural } from '../shared/words';
-import { DEMO_MERCHANT, readCatalogFile } from '../transaction/catalog';
+import { CATALOG_FILES, DEMO_MERCHANT, MERCHANT_NAMES, readCatalogFile } from '../transaction/catalog';
+import { resolve } from 'node:path';
 
 /** One row of the timeline as the screens show it. A recorder entry can give more than one row (for example a cart
  *  that also carries the merchant's suggested substitute); extra rows share the step number and are marked `sub`. */
@@ -17,14 +18,16 @@ export type TimelineRow = {
   hash: string;
 };
 
-type Attrs = { size?: string; unit_system?: string | null; gender?: string | null };
+type Attrs = { size?: string | null; unit_system?: string | null; gender?: string | null; stay?: import('../transaction/catalog').Stay };
 
 let names: Map<string, { name: string; attrs: Attrs }> | null = null;
 function catalog() {
   if (!names) {
     names = new Map();
     try {
-      for (const l of readCatalogFile().listings) for (const v of l.variants) names.set(v.id, { name: l.name, attrs: v.attributes });
+      for (const f of CATALOG_FILES) {
+        for (const l of readCatalogFile(resolve(process.cwd(), f)).listings) for (const v of l.variants) names.set(v.id, { name: l.name, attrs: v.stay ? { ...v.attributes, stay: v.stay } : v.attributes });
+      }
     } catch {
       /* no catalog file: fall back to the id below */
     }
@@ -42,13 +45,16 @@ function productName(variantId: string): string {
 }
 
 function sizeWords(a?: Attrs): string {
+  if (a?.stay) return a.stay.refund_policy === null ? '(no refund policy given)' : '';
   if (!a?.size) return '';
   return a.unit_system ? `${a.unit_system} ${a.size}` : `size ${a.size} (no size system given)`;
 }
 
 /** "Kestrel Glide 4, US 10" */
 export function itemWords(variantId: string, attrs?: Attrs): string {
-  const size = sizeWords(attrs ?? catalog().get(variantId)?.attrs);
+  const a = attrs ?? catalog().get(variantId)?.attrs;
+  const size = sizeWords(a);
+  if (a?.stay) return size ? `${productName(variantId)} ${size}` : productName(variantId);
   return size ? `${productName(variantId)}, ${size}` : productName(variantId);
 }
 
@@ -88,6 +94,7 @@ type Issue = { message?: string; variant_id?: string | null; specific_issue?: st
 export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
   const suggested = new Set<string>();
   let cart: Line[] = []; // the latest cart the merchant returned
+  let merchantName: string = DEMO_MERCHANT.name; // older runs did not record the merchant: they were all retail
   const out: TimelineRow[] = [];
   for (const e of entries) {
     const p = e.payload as any;
@@ -107,14 +114,15 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
     const items = (list?: Array<{ variant_id: string; quantity?: number }>) => (list ?? []).map((i) => itemWords(i.variant_id)).join(', ');
     switch (e.kind) {
       case 'agent.run.started':
-        out.push(row(`${p.agent?.name} v${p.agent?.version} started shopping`, `under instructions v${p.mandate?.version}, ${p.budget_remaining} left to spend${p.dry_run ? ', dry run (nothing is charged)' : ''}`));
+        if (p.merchant?.name) merchantName = p.merchant.name;
+        out.push(row(`${p.agent?.name} v${p.agent?.version} started ${p.merchant?.id === 'tidewell-stays' ? 'booking' : 'shopping'}`, `under instructions v${p.mandate?.version}, ${p.budget_remaining} left to spend${p.dry_run ? ', dry run (nothing is charged)' : ''}`));
         break;
       case 'agent.tool_call': {
         const why = reason(p.reasoning);
         if (p.tool === 'search_catalog') {
           const brands = p.input?.brands?.length ? ` for ${p.input.brands.join(' or ')}` : '';
           const max = p.input?.max_price ? ` up to ${p.input.max_price}` : '';
-          out.push(row(`Agent searched the ${DEMO_MERCHANT.name} catalog${brands}${max}`, why));
+          out.push(row(`Agent searched the ${merchantName} catalog${brands}${max}`, why));
         } else if (p.tool === 'create_cart') {
           out.push(row(`Agent asked for ${items(p.input?.items)}`, why));
         } else if (p.tool === 'update_cart') {
@@ -139,7 +147,7 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
       case 'agent.tool_result': {
         const r = p.result ?? {};
         if (r.error) out.push(row(`${p.tool === 'checkout' ? 'Checkout' : 'The call'} failed`, String(r.error), 'block'));
-        else if (p.tool === 'search_catalog') out.push(row(r.repeated ? 'Search repeated: same results' : `Search found ${plural((r.listings ?? []).length, 'listing')}`));
+        else if (p.tool === 'search_catalog') out.push(row(r.repeated ? 'Search repeated: same results' : `Search found ${plural((r.listings ?? []).length, merchantName === 'Tidewell Stays' ? 'rate' : 'listing')}`));
         else if (p.tool === 'checkout')
           out.push(
             row(
@@ -158,14 +166,15 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
         const issues = (p.validation_issues ?? []) as Issue[];
         cart = lines;
         const what = e.kind.endsWith('created') ? 'Cart created' : e.kind.endsWith('updated') ? 'Cart updated' : 'Cart checked before payment';
+        if (p.merchant_id && MERCHANT_NAMES[p.merchant_id]) merchantName = MERCHANT_NAMES[p.merchant_id];
         const out_ = lines.filter((l) => l.available === false);
         const words = lines.map((l) => itemWords(l.variant_id, l.attributes)).join(', ');
-        if (out_.length) out.push(row(`${what}: ${out_.map((l) => itemWords(l.variant_id, l.attributes)).join(', ')} ${out_.length === 1 ? 'is' : 'are'} out of stock`, '', 'warn'));
+        if (out_.length) out.push(row(`${what}: ${out_.map((l) => itemWords(l.variant_id, l.attributes)).join(', ')} ${out_.length === 1 ? 'is' : 'are'} ${out_.some((l) => l.attributes?.stay) ? 'sold out' : 'out of stock'}`, '', 'warn'));
         else out.push(row(`${what}: ${words}`, `${p.totals?.total?.value ?? ''} ${p.totals?.total?.currency_code ?? ''}, ${p.status === 'READY' ? 'ready to pay' : 'not ready'}`.replace(/^ +, /, '')));
         for (const i of issues) {
           if (!i.suggested_substitute) continue;
           suggested.add(i.suggested_substitute.variant_id);
-          out.push(row(`${DEMO_MERCHANT.name} suggested a substitute: ${itemWords(i.suggested_substitute.variant_id, i.suggested_substitute.attributes)}`, i.message ? `Merchant's message: ${quoted(i.message)}` : '', 'warn', true));
+          out.push(row(`${merchantName} suggested a substitute: ${itemWords(i.suggested_substitute.variant_id, i.suggested_substitute.attributes)}`, i.message ? `Merchant's message: ${quoted(i.message)}` : '', 'warn', true));
         }
         break;
       }
@@ -205,6 +214,15 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
         break;
       case 'paypal.tracker.added':
         out.push(row('Tracking added at PayPal', p.tracking_number ?? ''));
+        break;
+      case 'merchant.booking.confirmed':
+        out.push(row(`Booking confirmed by ${p.merchant ?? 'the merchant'}`, `confirmation ${p.booking_ref}, ${p.rate}`, 'ok'));
+        break;
+      case 'merchant.cancellation.refunded':
+        out.push(row(`Booking cancelled and refunded by ${p.merchant ?? 'the merchant'}`, `${money(p.amount)}${p.refund_id ? `, refund ${p.refund_id}` : ''}`, 'money'));
+        break;
+      case 'merchant.cancellation.refused':
+        out.push(row(`${p.merchant ?? 'The merchant'} refused to cancel`, String(p.reason ?? ''), 'warn'));
         break;
       case 'checkout.completed':
         out.push(row('Purchase captured', `${money(p.amount)}, capture ${p.paypal_capture_id ?? ''}`.replace(/, capture $/, ''), 'money'));

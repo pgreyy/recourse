@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { instructionWords } from '../shared/words';
 import { z } from 'zod';
 import { env } from '../config';
 import { reserveAiCall } from '../shared/ai/budget';
@@ -129,7 +130,16 @@ function factsFallback(outputs: string[], question = ''): string {
     : "I could not state that reliably from the settlement records. Open the case's Settlement panel for the confirmed PayPal ids.";
 }
 
+/** Final answers say "instructions" and "decision", whatever words the model used (facts are unchanged). */
+function scrub<T extends { output: any[] }>(r: T): T {
+  return { ...r, output: r.output.map((o: any) => (o.type === 'message' ? { ...o, content: (o.content ?? []).map((c: any) => (typeof c.text === 'string' ? { ...c, text: instructionWords(c.text) } : c)) } : o)) };
+}
+
 export async function clerkTurn(body: z.infer<typeof ClerkTurn>) {
+  return scrub(await clerkTurnRaw(body));
+}
+
+async function clerkTurnRaw(body: z.infer<typeof ClerkTurn>) {
   const first = await clerkModelTurn(body);
   const text = first.output.find((o: any) => o.type === 'message')?.content?.[0]?.text as string | undefined;
   if (!text || first.output.some((o: any) => o.type === 'function_call')) return first;

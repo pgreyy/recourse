@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, ErrorNote, Id, money, navigate, Status, short, useLoad, useLocation, when, type Tone, maskEmail, plural, BackButton } from '../lib';
 
-const EXAMPLE = "Running shoes, US men's 10, under $120, Kestrel or Sorin, by Friday";
+const EXAMPLE = 'Refundable hotel in Lisbon, Nov 20 to 22, under $400 total, 4 stars or more';
 
 export function Buyer() {
   const { query } = useLocation();
@@ -170,7 +170,23 @@ function MandateStatus({ s }: { s: string }) {
 const yesNo = (b: boolean) => (b ? 'Allowed' : 'Not allowed');
 
 function Rules({ spec }: { spec: any }) {
-  const rows: Array<[string, string]> = [
+  const st = spec.stay;
+  const rows: Array<[string, string]> = st
+    ? [
+        ['Category', spec.category],
+        ['City', st.city],
+        ['Dates', `Check-in ${st.check_in}, check-out ${st.check_out}`],
+        ['Nights', String(st.nights)],
+        ['Stars', st.min_stars ? `${st.min_stars} or more` : 'Any'],
+        ['Refund policy', st.refund_policy === 'REFUNDABLE' ? 'Refundable required (a rate with no refund policy does not count)' : 'Any'],
+        ['Total budget', `${money(spec.max_total)}, taxes included`],
+        ['Hotels', spec.brands_allowed.length ? spec.brands_allowed.join(', ') : 'Any hotel'],
+        ['Rooms', String(spec.quantity)],
+        ['Bookings', `At most ${spec.max_orders}`],
+        ['Substitutions', yesNo(spec.allow_substitutions)],
+        ['Authority ends', when(spec.expires_at)],
+      ]
+    : [
     ['Category', spec.category],
     ['Total budget', `${money(spec.max_total)}, all orders, tax and shipping included`],
     ...spec.attributes.map((a: any): [string, string] => [

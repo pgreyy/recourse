@@ -19,14 +19,14 @@ export function codeChecks(m: CaseMaterial): CodeCheck[] {
   const o = m.order;
   const mandateHash = m.mandate.mandate_hash?.trim() ?? '';
   const sig = checkMandateSignature(m.mandate);
-  out.push(ok('mandate.signature', sig.signature_valid, `mandate v${m.mandate.version} signature valid (${m.mandate.signing_key_id})`, `mandate signature check failed: ${sig.signature_check.reason}`));
-  out.push(ok('order.custom_id', o.custom_id === mandateHash, 'order custom_id equals the mandate_hash', 'order custom_id differs from the mandate_hash'));
+  out.push(ok('mandate.signature', sig.signature_valid, `instructions v${m.mandate.version} signature valid (${m.mandate.signing_key_id})`, `signature check on the instructions failed: ${sig.signature_check.reason}`));
+  out.push(ok('order.custom_id', o.custom_id === mandateHash, 'order custom_id equals the instructions hash', 'order custom_id differs from the instructions hash'));
 
   const pp = m.paypal.order;
   if (!pp) {
     out.push(ok('paypal.order', false, '', `PayPal order could not be read: ${m.paypal.read_error ?? 'no PayPal order id'}`));
   } else {
-    out.push(ok('paypal.custom_id', pp.custom_id === mandateHash, 'PayPal custom_id equals the mandate_hash', `PayPal custom_id is ${pp.custom_id}, mandate_hash is ${mandateHash}`));
+    out.push(ok('paypal.custom_id', pp.custom_id === mandateHash, 'PayPal custom_id equals the instructions hash', `PayPal custom_id is ${pp.custom_id}, the instructions hash is ${mandateHash}`));
     out.push(ok('paypal.invoice_id', pp.invoice_id === o.order_ref, `PayPal invoice_id equals order ref ${o.order_ref}`, `PayPal invoice_id is ${pp.invoice_id}, order ref is ${o.order_ref}`));
     const cap = pp.capture;
     // A capture under dispute is held by PayPal (PENDING, reason BUYER_COMPLAINT) and a settled one may be
@@ -71,8 +71,15 @@ export function codeChecks(m: CaseMaterial): CodeCheck[] {
     out.push(ok('snapshot.hash', recomputed === m.snapshot.sha256_stored && recomputed === recordedSha, `snapshot used at the decision re-hashes to ${recomputed.slice(0, 12)}…, as recorded`, `snapshot hash mismatch: recorded ${recordedSha}, stored ${m.snapshot.sha256_stored}, recomputed ${recomputed}`));
   }
 
-  const tracker = m.recorder.entries.find((e) => e.kind === 'paypal.tracker.added');
-  out.push(ok('tracking', !!o.tracker_id && (tracker?.payload as { http?: number } | undefined)?.http! < 300, `tracking ${o.tracker_id}`, 'no shipment tracker on the capture'));
+  // A shipment has a PayPal tracker; a hotel stay has the merchant's booking confirmation instead.
+  const booking = m.recorder.entries.find((e) => e.kind === 'merchant.booking.confirmed');
+  if (o.lines.some((l) => l.attributes.stay)) {
+    const ref = (booking?.payload as { booking_ref?: string } | undefined)?.booking_ref;
+    out.push(ok('booking.confirmation', Boolean(ref), `booking confirmation ${ref}`, 'no booking confirmation recorded'));
+  } else {
+    const tracker = m.recorder.entries.find((e) => e.kind === 'paypal.tracker.added');
+    out.push(ok('tracking', !!o.tracker_id && (tracker?.payload as { http?: number } | undefined)?.http! < 300, `tracking ${o.tracker_id}`, 'no shipment tracker on the capture'));
+  }
 
   const ack = m.recorder.entries.find((e) => e.kind === 'buyer.receipt.confirmed');
   if (!ack) out.push(na('receipt.acknowledgement', m.receipt ? `receipt ${m.receipt.status}; no acknowledgement` : 'no receipt'));
@@ -129,8 +136,10 @@ export function counterfactual(m: CaseMaterial): { source: 'code'; snapshot_sha2
     snapshot_sha256: m.snapshot.sha256_stored,
     compliant_alternatives: alternatives,
     note: alternatives.length
-      ? `${plural(alternatives.length, 'in-stock listing')} satisfied every mandate clause at the decision step, e.g. ${alternatives[0].name} ${alternatives[0].attributes.unit_system ?? ''} ${alternatives[0].attributes.size} at ${alternatives[0].price}`
-      : 'no in-stock listing satisfied every mandate clause at the decision step',
+      ? alternatives[0].attributes.stay
+        ? `${plural(alternatives.length, 'available rate')} satisfied every clause of the instructions at the decision step, e.g. ${alternatives[0].name} at ${alternatives[0].price}`
+        : `${plural(alternatives.length, 'in-stock listing')} satisfied every clause of the instructions at the decision step, e.g. ${alternatives[0].name} ${alternatives[0].attributes.unit_system ?? ''} ${alternatives[0].attributes.size} at ${alternatives[0].price}`
+      : 'nothing in stock satisfied every clause of the instructions at the decision step',
   };
 }
 

@@ -1,4 +1,5 @@
 import type { MandateRow } from '../authorization/mandate-document';
+import type { LineAttrs } from '../transaction/catalog';
 import type { MandateSpec } from '../authorization/mandate-spec';
 import { listCheckpoints, listEntries, type Checkpoint, type RecorderEntry } from '../evidence/recorder';
 import type { Snapshot } from '../evidence/snapshots';
@@ -18,7 +19,7 @@ export type StoredLine = {
   brand: string;
   quantity: number;
   price: string;
-  attributes: { size: string; unit_system: string | null; gender: string | null };
+  attributes: LineAttrs;
   variant_description: string;
   listing_description: string;
 };

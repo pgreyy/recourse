@@ -2,6 +2,7 @@ import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useLocation } from './lib';
 import { Operator } from './screens/Operator';
+import { OperatorDecision } from './screens/OperatorDecision';
 import { Buyer } from './screens/Buyer';
 import { AgentRun } from './screens/AgentRun';
 import { Home } from './screens/Home';
@@ -16,7 +17,7 @@ function App() {
   const { path } = useLocation();
   const section = '/' + (path.split('/')[1] ?? '');
   const screen =
-    section === '/operator' ? <Operator /> : section === '/buyer' ? <Buyer /> : section === '/agent' ? <AgentRun /> : section === '/judges' ? <Judges /> : section === '/console' ? (
+    path.startsWith('/operator/decision') ? <OperatorDecision /> : section === '/operator' ? <Operator /> : section === '/buyer' ? <Buyer /> : section === '/agent' ? <AgentRun /> : section === '/judges' ? <Judges /> : section === '/console' ? (
       <Suspense fallback={<p className="loading">Loading the console…</p>}>
         <Console />
       </Suspense>

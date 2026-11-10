@@ -399,3 +399,9 @@ td.num, th.num { font-family: var(--mono); font-size: 13px; }
 .back-btn:hover { color: var(--ink); background: var(--accent-soft); }
 .back-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .page-head > div > .back-btn { display: inline-flex; }
+
+/* who paid what, and why not the other verdicts */
+.who-paid { border-top: 1px solid var(--line); padding-top: var(--s2); margin-top: var(--s2); display: flex; flex-direction: column; gap: var(--s1); }
+.who-paid th[scope='row'] { text-align: left; font-weight: 600; width: 96px; color: var(--ink); text-transform: none; letter-spacing: 0; font-size: 14px; }
+ul.why-not { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+ul.why-not li { line-height: 1.45; }

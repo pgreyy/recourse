@@ -9,9 +9,22 @@ import type { CaseMaterial } from './material';
 export type Untrusted = { untrusted: true; author: 'merchant' | 'agent' | 'operator' | 'buyer' | 'carrier'; text: string };
 const U = (author: Untrusted['author'], text: string): Untrusted => ({ untrusted: true, author, text });
 
-/** The mandate as numbered clauses (ids match the firewall's rule names), so citations can be checked. */
+/** The buyer's instructions as numbered clauses (ids match the firewall's rule names), so citations can be checked. */
 export function mandateClauses(spec: MandateSpec): Array<{ id: string; text: string }> {
   const out: Array<{ id: string; text: string }> = [{ id: 'category', text: `category: ${spec.category}` }];
+  if (spec.stay) {
+    const st = spec.stay;
+    out.push({ id: 'stay.city', text: `city: ${st.city}` });
+    out.push({ id: 'stay.dates', text: `dates: check-in ${st.check_in}, check-out ${st.check_out}` });
+    out.push({ id: 'stay.nights', text: `${st.nights} ${st.nights === 1 ? 'night' : 'nights'}` });
+    if (st.min_stars) out.push({ id: 'stay.stars', text: `at least ${st.min_stars} stars` });
+    if (st.refund_policy === 'REFUNDABLE') out.push({ id: 'stay.refund_policy', text: 'the rate must be refundable' });
+    out.push({ id: 'budget.aggregate', text: `total at most ${spec.max_total.value} ${spec.max_total.currency}, taxes included` });
+    out.push({ id: 'quantity.max', text: `${spec.quantity} ${spec.quantity === 1 ? 'room' : 'rooms'}` });
+    out.push({ id: 'orders.max', text: `at most ${spec.max_orders} ${spec.max_orders === 1 ? 'booking' : 'bookings'}` });
+    out.push({ id: 'substitution', text: spec.allow_substitutions ? 'substitutions allowed' : 'no substitutions (a different hotel or dates than requested)' });
+    return out;
+  }
   for (const a of spec.attributes) {
     if (a.name === 'size') {
       out.push({ id: 'attribute.size', text: `size must be ${a.unit_system} ${a.value} (size value and size system)` });
@@ -46,7 +59,7 @@ function timeline(m: CaseMaterial) {
     const base = { seq: e.seq, kind: e.kind };
     switch (true) {
       case e.kind === 'agent.run.started':
-        return { ...base, summary: `agent ${p.agent?.name} v${p.agent?.version} started under mandate v${p.mandate?.version}` };
+        return { ...base, summary: `agent ${p.agent?.name} v${p.agent?.version} started under instructions v${p.mandate?.version}` };
       case e.kind === 'agent.tool_call':
         return {
           ...base,

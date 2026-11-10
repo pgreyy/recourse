@@ -32,6 +32,9 @@ export const ARCHIVE_TABLES = [
   'paypal_events',
 ] as const;
 
+/** The retail demo's own rows (operator, agents, saved PayPal, agreements), archived as RETAIL; parents first. */
+export const RETAIL_TABLES = ['operators', 'agents', 'agent_versions', 'liability_agreements', 'liability_agreement_agent_versions', 'payment_tokens'] as const;
+
 /** Refuse to touch a Neon database unless the owner passed --neon on purpose. */
 export function guardDatabase(argv: string[]) {
   const url = env('DATABASE_URL') ?? '';

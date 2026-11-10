@@ -92,8 +92,8 @@ async function substitutions(caseRef: string, cartId: string): Promise<Map<strin
 
 /** Firewall input from the cart response's own catalog snapshot (the evidence the decision used). */
 function firewallLines(cart: CartResponse, subs: Map<string, string>): FirewallLine[] {
-  const variants = new Map<string, { listing: CartResponse['catalog_snapshot']['listings'][number] }>();
-  for (const l of cart.catalog_snapshot.listings) for (const v of l.variants) variants.set(v.variant_id, { listing: l });
+  const variants = new Map<string, { listing: CartResponse['catalog_snapshot']['listings'][number]; stay?: { hotel: string; check_in: string } }>();
+  for (const l of cart.catalog_snapshot.listings) for (const v of l.variants) variants.set(v.variant_id, { listing: l, stay: v.attributes.stay });
   return cart.items.map((it) => {
     const listing = variants.get(it.variant_id)!.listing;
     const replaced = subs.get(it.variant_id);
@@ -106,7 +106,9 @@ function firewallLines(cart: CartResponse, subs: Map<string, string>): FirewallL
       quantity: it.quantity,
       unit_price_cents: Math.round(Number(it.price.value) * 100),
       attributes: it.attributes,
-      substituted_for: replaced ? { variant_id: replaced, listing_id: variants.get(replaced)?.listing.listing_id ?? '' } : undefined,
+      substituted_for: replaced
+        ? { variant_id: replaced, listing_id: variants.get(replaced)?.listing.listing_id ?? '', hotel: variants.get(replaced)?.stay?.hotel, check_in: variants.get(replaced)?.stay?.check_in }
+        : undefined,
     };
   });
 }
@@ -289,7 +291,7 @@ export async function checkout(req: CheckoutRequest): Promise<CheckoutResult> {
   }
 
   const token = await getToken(mandate.payment_token_id);
-  if (!token?.vault_id || token.status !== 'ACTIVE') return fail(order, 'mandate has no active saved payment method');
+  if (!token?.vault_id || token.status !== 'ACTIVE') return fail(order, 'the buyer instructions have no active saved payment method');
   const created = await createVaultOrder({ ...paypalInput, vaultId: token.vault_id, source: 'paypal' }, req.requestId);
   await appendEntry(order.case_ref, 'paypal.order.created', { order_ref: orderRef, http: created.status, debug_id: created.debugId, paypal_order_id: created.body?.id, status: created.body?.status, request_id: req.requestId });
   if (created.status >= 300) return fail(order, `PayPal create order HTTP ${created.status}: ${created.body?.name ?? ''} ${created.body?.message ?? ''}`.trim());
@@ -326,10 +328,28 @@ export async function finalize(order: OrderRow, paypalOrderId: string, captured:
   const anchorOk = anchorCheck.description.match && anchorCheck.custom_id.match && anchorCheck.invoice_id.match;
   await appendEntry(order.case_ref, 'paypal.anchor.verified', { ...anchorCheck, all_match: anchorOk });
 
-  const tracking = `STRIDE-${order.order_ref}`;
-  const tracker = await addTracker(paypalOrderId, capture.id, tracking, 'Stride & Co Demo Shipping');
-  const trackerId = tracker.status < 300 ? (tracker.body?.purchase_units?.[0]?.shipping?.trackers?.[0]?.id ?? tracking) : null;
-  await appendEntry(order.case_ref, 'paypal.tracker.added', { http: tracker.status, debug_id: tracker.debugId, tracking_number: tracking, tracker_id: trackerId, error: tracker.status >= 300 ? tracker.body : null });
+  // Retail ships, so the capture gets a PayPal tracker. A hotel stay ships nothing: the merchant's booking
+  // confirmation number is recorded instead, as evidence of what was booked.
+  const stays = (order.lines as Array<{ name: string; attributes?: { stay?: { hotel: string; check_in: string; check_out: string } } }>).filter((l) => l.attributes?.stay);
+  let trackerId: string | null = null;
+  let bookingRef: string | null = null;
+  if (stays.length) {
+    bookingRef = `TWS-${order.order_ref.slice(-6).toUpperCase()}`;
+    await appendEntry(order.case_ref, 'merchant.booking.confirmed', {
+      merchant: 'Tidewell Stays',
+      booking_ref: bookingRef,
+      rate: stays[0].name,
+      hotel: stays[0].attributes!.stay!.hotel,
+      check_in: stays[0].attributes!.stay!.check_in,
+      check_out: stays[0].attributes!.stay!.check_out,
+      paypal_capture_id: capture.id,
+    });
+  } else {
+    const tracking = `STRIDE-${order.order_ref}`;
+    const tracker = await addTracker(paypalOrderId, capture.id, tracking, 'Stride & Co Demo Shipping');
+    trackerId = tracker.status < 300 ? (tracker.body?.purchase_units?.[0]?.shipping?.trackers?.[0]?.id ?? tracking) : null;
+    await appendEntry(order.case_ref, 'paypal.tracker.added', { http: tracker.status, debug_id: tracker.debugId, tracking_number: tracking, tracker_id: trackerId, error: tracker.status >= 300 ? tracker.body : null });
+  }
 
   const { row, receipt, entry } = await tx(async (c: pg.PoolClient) => {
     for (const l of order.lines as Array<{ variant_id: string; quantity: number }>) {
@@ -337,9 +357,9 @@ export async function finalize(order: OrderRow, paypalOrderId: string, captured:
     }
     await c.query(`UPDATE carts SET status = 'COMPLETED', updated_at = now() WHERE id = $1`, [order.cart_id]);
     const updated = await c.query<OrderRow>(
-      `UPDATE orders SET status = 'CAPTURED', paypal_order_id = $2, paypal_capture_id = $3, anchor_verified = $4, tracker_id = $5, captured_at = now()
+      `UPDATE orders SET status = 'CAPTURED', paypal_order_id = $2, paypal_capture_id = $3, anchor_verified = $4, tracker_id = $5, booking_ref = $6, captured_at = now()
        WHERE id = $1 RETURNING *`,
-      [order.id, paypalOrderId, capture.id, anchorOk, trackerId],
+      [order.id, paypalOrderId, capture.id, anchorOk, trackerId, bookingRef],
     );
     const usage = await mandateUsage(order.mandate_lineage_id, c);
     const m = await c.query<{ spec: MandateSpec; status: string }>('SELECT spec, status FROM mandates WHERE id = $1', [order.mandate_id]);

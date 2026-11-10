@@ -31,6 +31,7 @@ async function run() {
         await storeAssessment({ result: r, scorecardRunId: runId, fixtureId: f.id });
         row = {
           id: f.id,
+          domain: f.domain,
           category: f.category,
           expected: f.expected,
           got: r.final_verdict,
@@ -42,7 +43,7 @@ async function run() {
           model: r.model ? `${r.model.provider}/${r.model.id}` : null,
         };
       } catch (e) {
-        row = { id: f.id, category: f.category, expected: f.expected, got: 'ERROR', correct: false, error: (e as Error).message.slice(0, 200) };
+        row = { id: f.id, domain: f.domain, category: f.category, expected: f.expected, got: 'ERROR', correct: false, error: (e as Error).message.slice(0, 200) };
       }
       results.push(row);
       running.done++;

@@ -1,4 +1,7 @@
 import type pg from 'pg';
+import { refundCapture } from '../paypal/settlement-api';
+import { listEntries } from '../evidence/recorder';
+import type { LineAttrs } from '../transaction/catalog';
 import type { MandateSpec } from '../authorization/mandate-spec';
 import { appendEntry } from '../evidence/recorder';
 import { config } from '../config';
@@ -43,19 +46,41 @@ type Line = {
   brand: string;
   quantity: number;
   price: string;
-  attributes: { size: string; unit_system: string | null; gender: string | null };
+  attributes: LineAttrs;
   variant_description: string;
   listing_description: string;
 };
 
 /**
- * Differences between the mandate and what was bought, computed in code (no LLM). Merchant text is
- * only scanned for sizing words; it is quoted, never followed.
+ * Differences between the buyer's instructions and what was bought, computed in code (no LLM). Merchant text is
+ * only scanned for sizing and refund words; it is quoted, never followed.
  */
 export function receiptDifferences(spec: MandateSpec, lines: Line[]): { differences: string[]; matches: string[] } {
   const differences: string[] = [];
   const matches: string[] = [];
   for (const l of lines) {
+    const st = l.attributes.stay;
+    if (spec.stay && st) {
+      const want = spec.stay;
+      if (st.city.toLowerCase() === want.city.toLowerCase()) matches.push(`city ${st.city}`);
+      else differences.push(`city: requested ${want.city}, booked ${st.city}`);
+      if (st.check_in === want.check_in && st.check_out === want.check_out) matches.push(`dates ${st.check_in} to ${st.check_out}`);
+      else differences.push(`dates: requested ${want.check_in} to ${want.check_out}, booked ${st.check_in} to ${st.check_out}`);
+      if (want.min_stars) {
+        if (st.stars === null) differences.push(`stars: requested ${want.min_stars} or more, rate gave none`);
+        else if (st.stars < want.min_stars) differences.push(`stars: requested ${want.min_stars} or more, booked ${st.stars}`);
+        else matches.push(`${st.stars} stars`);
+      }
+      if (want.refund_policy === 'REFUNDABLE') {
+        if (st.refund_policy === 'REFUNDABLE') matches.push('refundable rate');
+        else if (st.refund_policy === 'NON_REFUNDABLE') differences.push('refund policy: required refundable, rate is non-refundable');
+        else differences.push('refund policy: required refundable, rate gave none');
+        const text = `${l.variant_description} ${l.listing_description}`;
+        const said = text.match(/non-?refundable[^.]*|no refunds?[^.]*/i);
+        if (said) differences.push(`description says "${said[0].trim()}"`);
+      }
+      continue;
+    }
     for (const a of spec.attributes) {
       if (a.name === 'size') {
         const want = `${a.unit_system} ${a.value}`;
@@ -88,9 +113,9 @@ export async function loadReceipt(receiptId: string) {
   const { rows } = await db().query(
     `SELECT r.id AS receipt_id, r.status AS receipt_status, r.confirmed_at, r.acknowledgement_hash,
             o.id AS order_id, o.order_ref, o.case_ref, o.lines, o.total_value::text AS total, o.currency, o.firewall, o.compliance,
-            o.paypal_order_id, o.paypal_capture_id, o.captured_at, o.custom_id, o.anchor_head_hash, o.anchor_verified,
+            o.paypal_order_id, o.paypal_capture_id, o.captured_at, o.custom_id, o.anchor_head_hash, o.anchor_verified, o.booking_ref,
             m.id AS mandate_id, m.version AS mandate_version, m.source_text, m.spec, m.mandate_hash,
-            mer.name AS merchant_name
+            mer.name AS merchant_name, mer.domain
      FROM receipts r JOIN orders o ON o.id = r.order_id JOIN mandates m ON m.id = o.mandate_id
      JOIN merchants mer ON mer.id = o.merchant_id WHERE r.id = $1`,
     [receiptId],
@@ -113,7 +138,17 @@ export async function loadReceipt(receiptId: string) {
     ),
   ]);
   const diff = receiptDifferences(r.spec as MandateSpec, r.lines as Line[]);
-  return { ...r, ...diff, cases: cases.rows, refund: refund.rows[0] ?? null, ruling: ruling.rows[0] ?? null, firewall: r.firewall as FirewallResult };
+  // A cancellation request on a booking, as the recorder has it (refunded by the merchant, or refused with a reason).
+  const cancel = [...(await listEntries(r.case_ref))].reverse().find((e) => e.kind === 'merchant.cancellation.refunded' || e.kind === 'merchant.cancellation.refused');
+  return {
+    ...r,
+    ...diff,
+    cases: cases.rows,
+    refund: refund.rows[0] ?? null,
+    ruling: ruling.rows[0] ?? null,
+    cancellation: cancel ? { kind: cancel.kind, ...(cancel.payload as Record<string, unknown>) } : null,
+    firewall: r.firewall as FirewallResult,
+  };
 }
 
 /** "Confirm purchase": signed acknowledgement, stored and appended to the recorder. */
@@ -156,5 +191,37 @@ export async function reportIssue(receiptId: string, description: string) {
     await c.query(`UPDATE receipts SET status = 'ISSUE_REPORTED' WHERE id = $1`, [receiptId]);
     await appendEntry(r.case_ref, 'buyer.issue.reported', { case_id: rows[0].id, receipt_id: receiptId, order_ref: r.order_ref, description: description.slice(0, 2000) }, c);
   });
+  return loadReceipt(receiptId);
+}
+
+/**
+ * "Request cancellation" on a booking. A rate listed as REFUNDABLE is cancelled and refunded by the merchant on PayPal;
+ * any other rate is refused with the reason, and the buyer can report an issue instead. Both outcomes are recorded.
+ */
+export async function requestCancellation(receiptId: string) {
+  const r = await loadReceipt(receiptId);
+  if (!r) throw new Error('receipt not found');
+  if (r.cancellation) return r;
+  const line = (r.lines as Line[])[0];
+  const stay = line?.attributes?.stay;
+  if (!stay) throw new Error('not a booking');
+  if (stay.refund_policy === 'REFUNDABLE') {
+    const res = await refundCapture(r.paypal_capture_id, { value: r.total, currency: r.currency.trim() }, `cancel-${r.order_ref}`, 'Booking cancelled by the guest under a refundable rate.', `${r.order_ref}-CANCEL`);
+    await appendEntry(r.case_ref, 'merchant.cancellation.refunded', {
+      merchant: r.merchant_name,
+      rate: line.name,
+      http: res.status,
+      debug_id: res.debugId,
+      refund_id: res.body?.id ?? null,
+      status: res.body?.status ?? null,
+      amount: { value: r.total, currency: r.currency.trim() },
+      paypal_capture_id: r.paypal_capture_id,
+    });
+  } else {
+    const text = `${line.variant_description} ${line.listing_description}`;
+    const said = text.match(/non-?refundable[^.]*|no refunds?[^.]*/i)?.[0]?.trim();
+    const reason = stay.refund_policy === 'NON_REFUNDABLE' ? 'the rate is non-refundable' : `the rate has no refund policy${said ? `, and its description says "${said}"` : ''}`;
+    await appendEntry(r.case_ref, 'merchant.cancellation.refused', { merchant: r.merchant_name, rate: line.name, reason });
+  }
   return loadReceipt(receiptId);
 }

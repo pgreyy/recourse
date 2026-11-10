@@ -3,6 +3,7 @@ import type { ColDef } from 'ag-grid-community';
 import { useMemo } from 'react';
 import { api, ErrorNote, money, navigate, plural, SettlementStatus, shortWhen, useLoad, verdictLabel } from '../lib';
 import { gridTheme } from './gridTheme';
+import { WhoPaid } from './WhoPaid';
 
 const KIND: Record<string, string> = { RECOVERY: 'Recovery', DISPUTE_RESPONSE: 'Dispute response', NO_CHARGE: 'No charge', REVERSAL: 'Reversal' };
 const ACTION: Record<string, string> = {
@@ -39,7 +40,7 @@ export function Settlements() {
       {
         headerName: 'PayPal actions',
         flex: 2,
-        minWidth: 250,
+        minWidth: 230,
         autoHeight: true,
         valueGetter: (p) => (p.data?.actions ?? []).length,
         cellRenderer: (p: any) => (
@@ -52,6 +53,13 @@ export function Settlements() {
             ))}
           </ul>
         ),
+      },
+      {
+        headerName: 'Who paid what',
+        minWidth: 220,
+        autoHeight: true,
+        valueGetter: (p) => (p.data?.who_paid ? 1 : 0),
+        cellRenderer: (p: any) => (p.data?.who_paid ? <WhoPaid w={p.data.who_paid} compact /> : <span className="small muted">{p.data?.status === 'RECOVERED' ? '' : 'once PayPal confirms'}</span>),
       },
       { headerName: 'Updated', valueGetter: (p) => p.data?.updated_at, valueFormatter: (p) => shortWhen(p.value), sort: 'desc', minWidth: 112, maxWidth: 124 },
     ],

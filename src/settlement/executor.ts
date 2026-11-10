@@ -317,7 +317,7 @@ async function executeDispute(
     if (provide) {
       const a = await runAction(
         ob, caseRef, 'DISPUTE_PROVIDE_EVIDENCE', amount, { dispute_id: disputeId, file: 'recourse-evidence.pdf', bytes: pdf.length },
-        () => disputeAction(provide, { evidences: [{ evidence_type: evidenceType, notes: 'Signed mandate, signed buyer confirmation, recorder excerpt, PayPal anchor check and tracking. The item matched the mandate and was delivered as described; the buyer changed their mind.' }] }, [{ name: 'evidence-file', filename: 'recourse-evidence.pdf', contentType: 'application/pdf', data: pdf }]),
+        () => disputeAction(provide, { evidences: [{ evidence_type: evidenceType, notes: 'Signed buyer instructions, signed buyer confirmation, recorder excerpt, PayPal anchor check and tracking or booking confirmation. The purchase matched the instructions and was delivered as described; the buyer changed their mind.' }] }, [{ name: 'evidence-file', filename: 'recourse-evidence.pdf', contentType: 'application/pdf', data: pdf }]),
         () => ({ dispute_id: disputeId }),
       );
       const after = await getDispute(disputeId);
@@ -325,13 +325,54 @@ async function executeDispute(
     }
     if (escalate) {
       // Evidence can only be filed once the case is a claim; escalating hands the decision to PayPal.
-      const a = await runAction(ob, caseRef, 'DISPUTE_ESCALATE', null, { dispute_id: disputeId }, () => disputeAction(escalate, { note: 'Recourse: the purchase matched the signed mandate and the buyer confirmed it. Escalating so evidence can be filed.' }), () => ({ dispute_id: disputeId }));
+      const a = await runAction(ob, caseRef, 'DISPUTE_ESCALATE', null, { dispute_id: disputeId }, () => disputeAction(escalate, { note: 'Recourse: the purchase matched the buyer\'s signed instructions and the buyer confirmed it. Escalating so evidence can be filed.' }), () => ({ dispute_id: disputeId }));
       return done(a.status === 'SUCCEEDED' ? 'AWAITING_PAYPAL' : 'FAILED', a.status === 'SUCCEEDED' ? `provide_evidence not offered yet; escalated to a claim. Run execute again when PayPal offers provide_evidence. ${status()}` : `escalate failed: ${a.error}`);
     }
     check('paypal.offers.provide_evidence', false, 'provide_evidence not offered now');
     return done('AWAITING_PAYPAL', `${status()}; provide_evidence not offered now`);
   }
   return done('NO_ACTION', `${ob.verdict}: nobody is charged`);
+}
+
+/**
+ * Who paid what, from confirmed settlement records only (PayPal-confirmed actions and PayPal's own capture and refund
+ * records). Null until the obligation is settled and every money action is confirmed.
+ */
+export async function whoPaid(ob: ObligationRow, actions: Array<Record<string, any>>) {
+  if (!['RECOVERED', 'COMPLETED'].includes(ob.status)) return null;
+  const done = (name: string) => actions.find((a) => a.action === name && a.status === 'SUCCEEDED');
+  const refund = done('REFUND_BUYER');
+  const charge = done('CHARGE_OPERATOR') ?? done('INVOICE_OPERATOR');
+  if ((refund && refund.confirmation !== 'confirmed') || (charge && charge.confirmation !== 'confirmed')) return null;
+  const ccy = ob.currency.trim();
+  const cents = (v: unknown) => Math.round(Number(v ?? 0) * 100);
+  const fmt = (c: number) => (c / 100).toFixed(2);
+  const refunded = refund ? cents(refund.amount_value) : 0;
+  const charged = charge ? cents(charge.amount_value) : 0;
+  const unreturnedFee = charge ? cents(charge.request?.breakdown?.unreturned_fee) : 0;
+  // PayPal's fee on the recovery charge itself, from PayPal's capture record (kept by PayPal, not recovered).
+  const capture = charge?.response?.purchase_units?.[0]?.payments?.captures?.[0];
+  const recoveryFee = capture?.seller_receivable_breakdown?.paypal_fee?.value ? cents(capture.seller_receivable_breakdown.paypal_fee.value) : null;
+  const merchantNet = charged - refunded - unreturnedFee;
+  let agreement = null;
+  if (ob.liability_agreement_id) {
+    const la = (await db().query('SELECT version, per_incident_cap::text, aggregate_cap::text FROM liability_agreements WHERE id = $1', [ob.liability_agreement_id])).rows[0];
+    const used = (await db().query(`SELECT COALESCE(SUM(recovered_value), 0)::text AS v FROM settlement_obligations WHERE liability_agreement_id = $1 AND status = 'RECOVERED'`, [ob.liability_agreement_id])).rows[0].v;
+    if (la) agreement = { version: la.version, per_incident_cap: la.per_incident_cap, aggregate_cap: la.aggregate_cap, used: Number(used).toFixed(2), cap_remaining: (Number(la.aggregate_cap) - Number(used)).toFixed(2) };
+  }
+  return {
+    currency: ccy,
+    buyer: { refunded: fmt(refunded), refund_id: refund?.paypal_ids?.refund_id ?? null },
+    merchant: {
+      refunded_to_buyer: fmt(refunded),
+      paypal_fee_not_returned: fmt(unreturnedFee),
+      received_from_operator: fmt(charged),
+      net: fmt(merchantNet),
+      made_whole: merchantNet >= 0,
+      paypal_fee_on_recovery: recoveryFee === null ? null : fmt(recoveryFee),
+    },
+    operator: { charged: fmt(charged), capture_id: charge?.paypal_ids?.capture_id ?? null, agreement },
+  };
 }
 
 /** The settlement as shown to people: every action with real PayPal ids, status and confirmation. */
@@ -362,6 +403,7 @@ export async function settlementView(obligationId: string, live = false) {
     // Pre-check details are shown to people: "decision", "instructions" (stored text unchanged).
     checks: Array.isArray(ob.checks) ? (ob.checks as Array<Record<string, unknown>>).map((c) => (typeof c.detail === 'string' ? { ...c, detail: instructionWords(c.detail) } : c)) : ob.checks,
     paypal_dispute: paypalDispute,
+    who_paid: await whoPaid(ob, actions),
     actions: actions.map((a) => ({
       action: a.action,
       status: a.status,

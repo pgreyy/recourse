@@ -8,7 +8,7 @@ import type pg from 'pg';
 import { closeDb, tx } from '../shared/db/pool';
 import { checkMandateSignature } from '../authorization/mandate-document';
 import { verifyChain } from '../evidence/recorder';
-import { ARCHIVE_TABLES, guardDatabase, SCENARIOS } from './common';
+import { ARCHIVE_TABLES, RETAIL_TABLES, guardDatabase, SCENARIOS } from './common';
 
 class CheckDone extends Error {}
 
@@ -30,7 +30,7 @@ async function verify(c: pg.PoolClient, caseRef: string, mandateIds: string[]): 
     `case ${caseRef} ${shown}`,
     `chain valid ${v.valid} (${v.entries} entries)`,
     `checkpoint signatures valid ${v.checkpoints.all_signatures_valid} (${cps.length})`,
-    `mandate signatures valid ${sigs.length > 0 && sigs.every(Boolean)} (${sigs.length})`,
+    `signatures on the instructions valid ${sigs.length > 0 && sigs.every(Boolean)} (${sigs.length})`,
   ];
 }
 
@@ -46,6 +46,14 @@ async function main() {
     const rows = new Map((await c.query('SELECT table_name, rows FROM demo_archive WHERE label = $1', [label])).rows.map((r) => [r.table_name, r.rows as any[]]));
     if (!rows.size) throw new Error(`No archived scenario ${label}.`);
     const done: string[] = [];
+    // The retail scenarios need the retail operator, agents and agreements back first (archived as RETAIL by the reset).
+    const retail = new Map((await c.query(`SELECT table_name, rows FROM demo_archive WHERE label = 'RETAIL'`)).rows.map((r) => [r.table_name, r.rows as any[]]));
+    for (const t of RETAIL_TABLES) {
+      const data = retail.get(t) ?? [];
+      if (!data.length) continue;
+      const r = await c.query(`INSERT INTO ${t} OVERRIDING SYSTEM VALUE SELECT * FROM json_populate_recordset(NULL::${t}, $1) x ON CONFLICT DO NOTHING`, [JSON.stringify(data)]);
+      done.push(`retail ${t} ${r.rowCount}/${data.length}`);
+    }
     for (const t of ARCHIVE_TABLES) {
       let data = rows.get(t) ?? [];
       // Reputation is left out unless asked: restored history should not put an agent on step-up during a live rerun.

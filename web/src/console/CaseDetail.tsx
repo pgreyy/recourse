@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, ErrorNote, Id, Modal, money, navigate, SettlementStatus, short, Status, useLoad, useLocation, Verdict, when, Who, maskEmail, plural } from '../lib';
 import { Timeline, type Entry } from '../timeline';
+import { WhoPaid } from './WhoPaid';
 
 type Detail = {
   case: any;
@@ -14,6 +15,7 @@ type Detail = {
   counterfactual: { note: string; snapshot_sha256: string | null; compliant_alternatives: any[] };
   injection_flags: Array<{ location: string; author: string; pattern: string; excerpt: string; note: string }>;
   settlement: any[];
+  why_not?: Array<{ verdict: string; text: string; source: 'code' | 'ai' }>;
   verification: { verified_at: string; from_cache: boolean };
 };
 
@@ -160,6 +162,18 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
                   Operator accepts
                 </button>
               ))}
+            {ruling && (
+              <a
+                className="small"
+                href={`/app/operator/decision?case=${c.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate(`/operator/decision?case=${c.id}`);
+                }}
+              >
+                Operator's view of this decision
+              </a>
+            )}
             </div>
           </div>
         </div>
@@ -307,6 +321,20 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
                 <Block title="Reasoning" by="ai">
                   <p>{a.reasoning}</p>
                 </Block>
+                {(d.data.why_not ?? []).length > 0 && (
+                  <div className="stack" style={{ gap: 4 }}>
+                    <h3>Why not the others</h3>
+                    <ul className="why-not">
+                      {(d.data.why_not ?? [])
+                        .filter((w) => w.verdict !== (c.ruling?.verdict ?? a.verdict))
+                        .map((w) => (
+                          <li key={w.verdict}>
+                            <span>{w.text}</span> <Who by={w.source} />
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
                 <Block title={`Flagged in the evidence (${injection_flags.length})`} by="code">
                   {injection_flags.length === 0 && <p className="muted">Nothing instruction-like found.</p>}
                   {injection_flags.map((f, i) => (
@@ -395,6 +423,11 @@ function Snapshot({ order, cf }: { order: any; cf: Detail['counterfactual'] }) {
   const alt = cf?.compliant_alternatives?.[0];
   if (!bought) return null;
   const size = (x: any) => `${x.attributes.gender ? `${x.attributes.gender}'s ` : ''}${x.attributes.unit_system ? `${x.attributes.unit_system} ${x.attributes.size}` : `${x.attributes.size} (no size system given)`}`;
+  // A hotel rate: its dates, stars and refund policy as the merchant listed them.
+  const what = (x: any) =>
+    x.attributes.stay
+      ? `${x.attributes.stay.check_in} to ${x.attributes.stay.check_out}, ${x.attributes.stay.stars ?? '?'} stars, ${x.attributes.stay.refund_policy === 'REFUNDABLE' ? 'refundable' : x.attributes.stay.refund_policy === 'NON_REFUNDABLE' ? 'non-refundable' : 'no refund policy given'}`
+      : `Size ${size(x)}`;
   return (
     <div className="stack" style={{ gap: 6 }}>
       <h3 className="row" style={{ gap: 6 }}>
@@ -405,18 +438,18 @@ function Snapshot({ order, cf }: { order: any; cf: Detail['counterfactual'] }) {
           <div className="small muted">Bought</div>
           <strong>{bought.name}</strong>
           <div className="small">
-            Size {size(bought)}, {bought.price}
+            {what(bought)}, {bought.price}
           </div>
           <div className="small muted mono">{bought.variant_id}</div>
         </div>
         {alt ? (
           <div className="alt">
             <div className="small" style={{ color: 'var(--ok-ink)' }}>
-              Compliant alternative, in stock
+              Compliant alternative, {alt.attributes?.stay ? 'available' : 'in stock'}
             </div>
             <strong>{alt.name}</strong>
             <div className="small">
-              Size {size(alt)}, {alt.price}, {alt.stock} in stock
+              {what(alt)}, {alt.price}, {alt.stock} {alt.attributes?.stay ? 'left' : 'in stock'}
             </div>
             <div className="small muted mono">{alt.variant_id}</div>
           </div>
@@ -528,6 +561,7 @@ function SettlementPanel({ obligations, busy, act }: { obligations: any[]; busy:
                 ))}
               </tbody>
             </table>
+            {o.who_paid && <WhoPaid w={o.who_paid} />}
             {o.paypal_dispute && (
               <p className="small">
                 PayPal dispute now: <strong>{codeWords(o.paypal_dispute.status)}</strong>
@@ -558,7 +592,7 @@ function SettlementPanel({ obligations, busy, act }: { obligations: any[]; busy:
   );
 }
 
-function PersonDialog(p: { title: string; text: string; withEmail?: boolean; busy: boolean; error: Error | null; onClose: () => void; onConfirm: (name: string, email: string) => void }) {
+export function PersonDialog(p: { title: string; text: string; withEmail?: boolean; busy: boolean; error: Error | null; onClose: () => void; onConfirm: (name: string, email: string) => void }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   return (

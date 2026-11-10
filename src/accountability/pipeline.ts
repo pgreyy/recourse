@@ -23,7 +23,7 @@ export function validate(m: CaseMaterial, out: AssessmentOutput, clauses: Map<st
   const seqs = new Set(m.recorder.entries.map((e) => e.seq));
   for (const s of out.cited_entries) if (!seqs.has(s)) problems.push(`cited entry ${s} does not exist`);
   for (const c of out.violated_clauses) {
-    if (!clauses.has(c)) problems.push(`clause ${c} is not in the mandate`);
+    if (!clauses.has(c)) problems.push(`clause ${c} is not in the instructions`);
     else if (clauses.get(c) === 'PASS') problems.push(`clause ${c} was verified as PASS by code, so it cannot be violated`);
   }
   if (out.verdict !== 'INCONCLUSIVE' && out.cited_entries.length === 0) problems.push('no recorder entry cited');

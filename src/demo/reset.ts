@@ -1,13 +1,12 @@
 // npm run demo:reset -- --yes [--neon]
-// Archives scenario A and B, wipes the test data, and seeds a clean demo. See docs/demo-reset.md.
+// Archives scenario A and B and the retail set, wipes the test data, and seeds a clean travel demo. See docs/demo-reset.md.
 import { spawnSync } from 'node:child_process';
 import type pg from 'pg';
 import '../config';
 import { env } from '../config';
 import { closeDb, db, tx } from '../shared/db/pool';
-import { AGENT_NAME, AGENT_VERSIONS, UNCOVERED } from '../transaction/agent/versions';
-import { AgreementRequest, buildTerms, signAcceptance, termsHash, type AgreementRow } from '../authorization/liability-agreements';
-import { ARCHIVE_TABLES, SCENARIOS, guardDatabase } from './common';
+import { TRAVEL_OPERATOR, UNCOVERED } from '../transaction/agent/versions';
+import { ARCHIVE_TABLES, RETAIL_TABLES, SCENARIOS, guardDatabase } from './common';
 
 const ACME = 'Acme Shopping Agents';
 const BRANDS = /\b(nike|asics|adidas|brooks|pegasus|gel-nimbus|hoka|saucony|new balance|on cloud)\b/i;
@@ -94,68 +93,58 @@ async function wipe(c: pg.PoolClient) {
   await c.query('UPDATE mandates SET supersedes_id = NULL');
   await del('mandates', 'DELETE FROM mandates');
 
-  // Operators: keep one Acme (the one whose saved PayPal is active) and one Drift; remove the rest.
-  const acme = (
-    await q(
-      c,
-      `SELECT o.id FROM operators o LEFT JOIN payment_tokens t ON t.operator_id = o.id AND t.owner_type = 'OPERATOR' AND t.status = 'ACTIVE'
-       WHERE o.name = $1 ORDER BY (t.id IS NOT NULL) DESC, o.created_at LIMIT 1`,
-      [ACME],
-    )
-  )[0]?.id ?? null;
-  const drift = (await q(c, 'SELECT id FROM operators WHERE name = $1 ORDER BY created_at LIMIT 1', [UNCOVERED.operator]))[0]?.id ?? null;
-  const keepOps = [acme, drift].filter(Boolean);
-
-  // Saved PayPal: keep every ACTIVE token of buyers and of Acme (PayPal returns the same vault id for the same
-  // payer and merchant, so these are reused); drop pending, failed, revoked ones and other operators' tokens.
-  await del('payment_tokens', `DELETE FROM payment_tokens WHERE status <> 'ACTIVE' OR (owner_type = 'OPERATOR' AND operator_id IS DISTINCT FROM $1)`, [acme]);
-  // Agents: only the demo agent versions survive, with their ids (archived runs refer to them).
-  const demoVersions: Array<[string | null, string, string[]]> = [
-    [acme, AGENT_NAME, AGENT_VERSIONS.map((v) => v.version)],
-    [drift, UNCOVERED.agent, [UNCOVERED.version]],
-  ];
-  const keepVersionIds: string[] = [];
-  for (const [op, name, versions] of demoVersions) {
-    if (!op) continue;
-    const rows = await q(c, `SELECT v.id FROM agent_versions v JOIN agents a ON a.id = v.agent_id WHERE a.operator_id = $1 AND a.name = $2 AND v.version = ANY($3::text[])`, [op, name, versions]);
-    keepVersionIds.push(...rows.map((r) => r.id));
+  // Retail (the shoe demo): archived as RETAIL, then removed from view. Restoring scenario A or B puts it back.
+  const retail = await archiveRetail(c);
+  for (const [t, ids] of [
+    ['payment_tokens', retail.ids.payment_tokens],
+    ['liability_agreement_agent_versions', null],
+    ['liability_agreements', retail.ids.liability_agreements],
+    ['agent_versions', retail.ids.agent_versions],
+    ['agents', retail.ids.agents],
+    ['operators', retail.ids.operators],
+  ] as Array<[string, string[] | null]>) {
+    if (t === 'liability_agreement_agent_versions') {
+      await del(t, 'DELETE FROM liability_agreement_agent_versions WHERE liability_agreement_id = ANY($1::uuid[]) OR agent_version_id = ANY($2::uuid[])', [retail.ids.liability_agreements, retail.ids.agent_versions]);
+    } else await del(t, `DELETE FROM ${t} WHERE id = ANY($1::uuid[])`, [ids]);
   }
-  await del('liability_agreement_agent_versions', 'DELETE FROM liability_agreement_agent_versions');
-  await del('agent_versions', 'DELETE FROM agent_versions WHERE NOT (id = ANY($1::uuid[]))', [keepVersionIds]);
+
+  // Operators now: Drift Commerce (uncovered) and Wayfare Agents (travel), with everything they already have.
+  const keepOps = (await q(c, `SELECT id FROM operators WHERE name = ANY($1::text[])`, [[UNCOVERED.operator, TRAVEL_OPERATOR]])).map((r) => r.id);
+  // Saved PayPal: keep every ACTIVE token of buyers and of the kept operators (PayPal returns the same vault id for
+  // the same payer and merchant, so these are reused); drop pending, failed and revoked ones.
+  await del('payment_tokens', `DELETE FROM payment_tokens WHERE status <> 'ACTIVE' OR (owner_type = 'OPERATOR' AND NOT (operator_id = ANY($1::uuid[])))`, [keepOps]);
+  await del('liability_agreement_agent_versions', `DELETE FROM liability_agreement_agent_versions x USING liability_agreements la WHERE la.id = x.liability_agreement_id AND NOT (la.operator_id = ANY($1::uuid[]))`, [keepOps]);
+  await del('liability_agreements', `DELETE FROM liability_agreements la WHERE NOT (la.operator_id = ANY($1::uuid[])) AND NOT EXISTS (SELECT 1 FROM payment_tokens t WHERE t.liability_agreement_id = la.id)`, [keepOps]);
+  await del('agent_versions', `DELETE FROM agent_versions v USING agents a WHERE a.id = v.agent_id AND NOT (a.operator_id = ANY($1::uuid[]))
+    AND NOT EXISTS (SELECT 1 FROM liability_agreement_agent_versions x WHERE x.agent_version_id = v.id)`, [keepOps]);
   await del('agents', 'DELETE FROM agents a WHERE NOT EXISTS (SELECT 1 FROM agent_versions v WHERE v.agent_id = a.id)');
-
-  // Agreements: a fresh accepted v1 for Acme covering exactly the demo versions. Acme's saved PayPal moves onto
-  // it (an operator token always belongs to an agreement), then every older agreement is deleted.
-  let agreementNote = 'none (no saved PayPal for Acme yet; seed:agents creates the agreement)';
-  const token = acme ? (await q(c, `SELECT id FROM payment_tokens WHERE operator_id = $1 AND owner_type = 'OPERATOR' AND status = 'ACTIVE'`, [acme]))[0] : null;
-  if (acme && token) {
-    const op = (await q(c, 'SELECT id, name, email FROM operators WHERE id = $1', [acme]))[0];
-    await c.query(`UPDATE liability_agreements SET status = 'SUPERSEDED', version = version + 100000 WHERE operator_id = $1`, [acme]);
-    const req = AgreementRequest.parse({});
-    const terms = await buildTerms(c, op, 1, req);
-    const ag = (
-      await c.query<AgreementRow>(
-        `INSERT INTO liability_agreements (operator_id, version, terms, terms_hash, per_incident_cap, aggregate_cap, currency, appeal_window_hours)
-         VALUES ($1, 1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [acme, JSON.stringify(terms), termsHash(terms), req.per_incident_cap.value, req.aggregate_cap.value, req.aggregate_cap.currency, req.appeal_window_hours],
-      )
-    ).rows[0];
-    for (const v of terms.covered_agent_versions) await c.query('INSERT INTO liability_agreement_agent_versions (liability_agreement_id, agent_version_id) VALUES ($1, $2)', [ag.id, v.agent_version_id]);
-    const by = { name: 'Acme Ops (demo reset)', email: op.email };
-    const at = new Date();
-    const signed = signAcceptance(ag, by, at);
-    await c.query(
-      `UPDATE liability_agreements SET status = 'ACCEPTED', accepted_at = $2, accepted_by_name = $3, accepted_by_email = $4,
-         acceptance_hash = $5, acceptance_signature = $6, signing_key_id = $7 WHERE id = $1`,
-      [ag.id, at, by.name, by.email, signed.acceptanceHash, signed.signature, signed.keyId],
-    );
-    await c.query('UPDATE payment_tokens SET liability_agreement_id = $1 WHERE id = $2', [ag.id, token.id]);
-    agreementNote = `Acme agreement v1 accepted, covering ${terms.covered_agent_versions.map((v) => `${v.agent_name} ${v.version}`).join(', ')}; Acme's saved PayPal linked to it`;
-  }
-  await del('liability_agreements', 'DELETE FROM liability_agreements la WHERE NOT EXISTS (SELECT 1 FROM payment_tokens t WHERE t.liability_agreement_id = la.id)');
-  await del('operators', 'DELETE FROM operators WHERE NOT (id = ANY($1::uuid[]))', [keepOps]);
+  await del('operators', 'DELETE FROM operators o WHERE NOT (id = ANY($1::uuid[])) AND NOT EXISTS (SELECT 1 FROM agents a WHERE a.operator_id = o.id) AND NOT EXISTS (SELECT 1 FROM liability_agreements la WHERE la.operator_id = o.id)', [keepOps]);
   await c.query(`UPDATE operators SET status = 'ACTIVE' WHERE id = ANY($1::uuid[])`, [keepOps]);
-  return { deleted: n, acme, drift, keptScorecardRuns: keepRuns.length, agreementNote };
+  return { deleted: n, keptScorecardRuns: keepRuns.length, agreementNote: retail.note };
+}
+
+/** The retail demo's operator, agents, saved PayPal and agreements, archived once as RETAIL (kept as is after that). */
+async function archiveRetail(c: pg.PoolClient) {
+  const operators = await q(c, 'SELECT * FROM operators WHERE name = $1', [ACME]);
+  const opIds = operators.map((o) => o.id);
+  const drift = await q(c, 'SELECT id FROM operators WHERE name = $1', [UNCOVERED.operator]);
+  const agents = await q(c, `SELECT * FROM agents WHERE operator_id = ANY($1::uuid[]) OR (operator_id = ANY($2::uuid[]) AND name = $3)`, [opIds, drift.map((d) => d.id), UNCOVERED.agent]);
+  const agentVersions = await q(c, 'SELECT * FROM agent_versions WHERE agent_id = ANY($1::uuid[])', [agents.map((a) => a.id)]);
+  const agreements = await q(c, 'SELECT * FROM liability_agreements WHERE operator_id = ANY($1::uuid[])', [opIds]);
+  const coverage = await q(c, 'SELECT * FROM liability_agreement_agent_versions WHERE liability_agreement_id = ANY($1::uuid[])', [agreements.map((a) => a.id)]);
+  const tokens = await q(c, `SELECT * FROM payment_tokens WHERE owner_type = 'OPERATOR' AND operator_id = ANY($1::uuid[])`, [opIds]);
+  const ids = {
+    operators: opIds,
+    agents: agents.map((a) => a.id),
+    agent_versions: agentVersions.map((v) => v.id),
+    liability_agreements: agreements.map((a) => a.id),
+    payment_tokens: tokens.map((t) => t.id),
+  };
+  const have = await q(c, `SELECT 1 FROM demo_archive WHERE label = 'RETAIL' LIMIT 1`);
+  if (have.length) return { ids, note: `retail set already archived; removed ${opIds.length} operator(s), ${ids.agent_versions.length} agent version(s) from view` };
+  const rows: Record<string, unknown[]> = { operators, agents, agent_versions: agentVersions, liability_agreements: agreements, liability_agreement_agent_versions: coverage, payment_tokens: tokens };
+  for (const t of RETAIL_TABLES) await c.query('INSERT INTO demo_archive (label, table_name, rows) VALUES ($1, $2, $3)', ['RETAIL', t, JSON.stringify(rows[t] ?? [])]);
+  return { ids, note: `retail set archived as RETAIL (${RETAIL_TABLES.map((t) => `${t} ${rows[t]?.length ?? 0}`).join(', ')}) and removed from view` };
 }
 
 function runScript(label: string, file: string) {
@@ -170,8 +159,9 @@ async function main() {
   const { host } = guardDatabase(argv);
   if (!argv.includes('--yes')) {
     console.log(`demo:reset would archive scenarios ${Object.entries(SCENARIOS).map(([k, v]) => `${k} (${v})`).join(' and ')} into demo_archive,`);
-    console.log('delete every case, order, mandate, agent run, snapshot and recorder entry, keep one Acme and one Drift operator,');
-    console.log('rebuild the agreements, reseed the catalog and agents, and keep the latest scorecard run per model.');
+    console.log('archive the retail operator and agents as RETAIL and remove them from view, delete every case, order, set of buyer');
+    console.log('instructions, agent run, snapshot and recorder entry, reseed the catalogs and the travel agents (Wayfare, Drift),');
+    console.log('and keep the latest scorecard run per model.');
     console.log(`Database: ${host}. Nothing done. Run again with --yes to do it.`);
     return;
   }
@@ -184,7 +174,7 @@ async function main() {
   step1.archived.forEach((l) => console.log(`archive ${l}`));
   console.log(`deleted: ${Object.entries(step1.wiped.deleted).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   console.log(`kept: scorecard runs ${step1.wiped.keptScorecardRuns}`);
-  console.log(`operator: ${step1.wiped.agreementNote}`);
+  console.log(`retail: ${step1.wiped.agreementNote}`);
 
   runScript('catalog seed', 'src/transaction/seed.ts').forEach((l) => console.log(`seed: ${l}`));
   runScript('agent seed', 'src/transaction/agent/seed-agents.ts').forEach((l) => console.log(`seed:agents: ${l}`));

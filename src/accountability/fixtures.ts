@@ -8,7 +8,7 @@ import { checkpointDocument, entryHash, GENESIS_HASH, hashedBody, type Checkpoin
 import type { Snapshot } from '../evidence/snapshots';
 import { canonicalHash } from '../shared/crypto/canonical';
 import { loadSigner, signDocument } from '../shared/crypto/signing';
-import { readCatalogFile } from '../transaction/catalog';
+import { readCatalogFile, TRAVEL_MERCHANT } from '../transaction/catalog';
 import { runFirewall, type FirewallLine } from '../transaction/firewall';
 import type { CaseMaterial, StoredLine } from './material';
 
@@ -19,6 +19,10 @@ import type { CaseMaterial, StoredLine } from './material';
  */
 export const Fixture = z.object({
   id: z.string(),
+  domain: z.enum(['retail', 'travel']).default('retail'),
+  source_text: z.string().optional(),
+  /** Travel: the merchant refused a cancellation request, with this reason. */
+  cancellation_refused: z.string().optional(),
   category: z.enum(['agent_fault', 'merchant_fault', 'buyer_remorse', 'tampered', 'injection', 'third_party', 'borderline']),
   expected: z.enum(['AGENT_FAULT', 'MERCHANT_FAULT', 'BUYER_REMORSE', 'THIRD_PARTY_FAULT', 'INCONCLUSIVE']),
   title: z.string(),
@@ -42,6 +46,28 @@ export function readFixtures(path = resolve(process.cwd(), 'data/scorecard-cases
 }
 
 const TEXT = "Running shoes, US men's 10, under $120, Kestrel or Sorin, by Friday";
+const TRAVEL_TEXT = 'Refundable hotel in Lisbon, Nov 20 to 22, under $400 total, 4 stars or more';
+
+function travelSpec(overrides: Record<string, unknown> = {}): MandateSpec {
+  const stay = { city: 'Lisbon', check_in: '2026-11-20', check_out: '2026-11-22', nights: 2, min_stars: 4, refund_policy: 'REFUNDABLE', ...((overrides.stay as Record<string, unknown>) ?? {}) };
+  const { stay: _s, ...rest } = overrides;
+  void _s;
+  return MandateSpec.parse({
+    category: 'hotel stays',
+    max_total: { value: '400.00', currency: 'USD' },
+    attributes: [],
+    brands_allowed: [],
+    merchants_allowed: null,
+    quantity: 1,
+    max_orders: 1,
+    allow_substitutions: false,
+    allow_split_orders: false,
+    deadline: stay.check_in,
+    expires_at: null,
+    stay,
+    ...rest,
+  });
+}
 
 function baseSpec(now: Date, overrides: Record<string, unknown> = {}): MandateSpec {
   const deadline = new Date(now.getTime() + 3 * 864e5).toISOString().slice(0, 10);
@@ -62,7 +88,7 @@ function baseSpec(now: Date, overrides: Record<string, unknown> = {}): MandateSp
 }
 
 function snapshotFrom(f: Fixture): Snapshot {
-  const cat = readCatalogFile();
+  const cat = readCatalogFile(resolve(process.cwd(), f.domain === 'travel' ? 'data/catalog-tidewell.json' : 'data/catalog.json'));
   return {
     merchant: { id: cat.merchant.id, name: cat.merchant.name, delivery_days: cat.merchant.delivery_days },
     catalog_version: cat.catalog_version,
@@ -77,7 +103,7 @@ function snapshotFrom(f: Fixture): Snapshot {
         variants: l.variants
           .map((v) => ({
             variant_id: v.id,
-            attributes: v.attributes,
+            attributes: v.stay ? { ...v.attributes, stay: v.stay } : v.attributes,
             price: { currency_code: cat.merchant.currency, value: v.price },
             stock: f.catalog?.stock?.[v.id] ?? v.stock,
             description: f.catalog?.descriptions?.[v.id] ?? v.description,
@@ -91,7 +117,11 @@ function snapshotFrom(f: Fixture): Snapshot {
 export function buildFixtureMaterial(f: Fixture, now = new Date()): CaseMaterial {
   const signer = loadSigner();
   const caseRef = `SC-${f.id}`;
-  const spec = baseSpec(now, f.mandate);
+  const travel = f.domain === 'travel';
+  const spec = travel ? travelSpec(f.mandate) : baseSpec(now, f.mandate);
+  const agentName = travel ? 'Wayfare Booker' : 'Acme Shopper';
+  const operatorName = travel ? 'Wayfare Agents' : 'Acme Shopping Agents';
+  const opsAuthor = travel ? 'Wayfare Ops' : 'Acme Ops';
   const snap = snapshotFrom(f);
   const snapSha = canonicalHash(snap);
   const find = (id: string) => {
@@ -105,7 +135,7 @@ export function buildFixtureMaterial(f: Fixture, now = new Date()): CaseMaterial
     lineage_id: randomUUID(),
     version: 1,
     buyer_email: 'buyer@example.com',
-    source_text: TEXT,
+    source_text: f.source_text ?? (travel ? TRAVEL_TEXT : TEXT),
     spec,
     vault_id: 'FIXTURE-VAULT',
     signed_at: new Date(now.getTime() - 3600e3),
@@ -140,15 +170,19 @@ export function buildFixtureMaterial(f: Fixture, now = new Date()): CaseMaterial
   const cartId = `CART-${f.id}`;
   const lineOf = (x: ReturnType<typeof find>) => ({ variant_id: x.v.variant_id, quantity: 1, price: x.v.price.value, attributes: x.v.attributes, available: x.v.stock > 0 });
 
-  add('agent.run.started', { agent: { name: 'Acme Shopper', version: f.purchase.path === 'substitute' ? '1.3' : '2.0' }, mandate: { id: mandate.id, version: 1, mandate_hash: mandate.mandate_hash } });
-  add('agent.tool_call', { tool: 'search_catalog', reasoning: reason('search_catalog', 'Find running shoes in US men 10 from the allowed brands.'), input: {}, catalog_snapshot_sha256: snapSha });
+  add('agent.run.started', { agent: { name: agentName, version: f.purchase.path === 'substitute' ? '1.3' : '2.0' }, ...(travel ? { merchant: TRAVEL_MERCHANT } : {}), mandate: { id: mandate.id, version: 1, mandate_hash: mandate.mandate_hash } });
+  add('agent.tool_call', { tool: 'search_catalog', reasoning: reason('search_catalog', travel ? 'Find refundable 4-star rates in Lisbon for Nov 20 to 22 within budget.' : 'Find running shoes in US men 10 from the allowed brands.'), input: {}, catalog_snapshot_sha256: snapSha });
   if (f.purchase.path === 'substitute') {
     const req = find(f.purchase.requested!);
     add('merchant.cart.created', {
       cart_id: cartId,
       status: 'INCOMPLETE',
       lines: [lineOf(req)],
-      validation_issues: [{ code: 'INVENTORY_ISSUE', specific_issue: 'ITEM_OUT_OF_STOCK', message: `${req.l.name}, size ${req.v.attributes.size}, is out of stock. Size ${bought.v.attributes.size} is available at the same price.`, variant_id: req.v.variant_id, suggested_substitute: { variant_id: bought.v.variant_id, description: `size ${bought.v.attributes.size}`, attributes: bought.v.attributes } }],
+      validation_issues: [
+        travel
+          ? { code: 'INVENTORY_ISSUE', specific_issue: 'ITEM_OUT_OF_STOCK', message: `${req.l.name} is sold out for these dates. ${bought.l.name} is available for the same dates at ${bought.v.price.value}.`, variant_id: req.v.variant_id, suggested_substitute: { variant_id: bought.v.variant_id, description: bought.l.name, attributes: bought.v.attributes } }
+          : { code: 'INVENTORY_ISSUE', specific_issue: 'ITEM_OUT_OF_STOCK', message: `${req.l.name}, size ${req.v.attributes.size}, is out of stock. Size ${bought.v.attributes.size} is available at the same price.`, variant_id: req.v.variant_id, suggested_substitute: { variant_id: bought.v.variant_id, description: `size ${bought.v.attributes.size}`, attributes: bought.v.attributes } },
+      ],
       catalog_snapshot: { sha256: snapSha },
     });
     add('agent.tool_call', { tool: 'create_cart', reasoning: reason('create_cart', `Cheapest matching listing: ${req.l.name}.`), input: { items: [{ variant_id: req.v.variant_id, quantity: 1 }] }, result: { status: 'INCOMPLETE' }, catalog_snapshot_sha256: snapSha });
@@ -156,10 +190,21 @@ export function buildFixtureMaterial(f: Fixture, now = new Date()): CaseMaterial
     add('agent.tool_call', { tool: 'update_cart', reasoning: reason('update_cart', `Accept the merchant's suggested substitute ${bought.v.variant_id}.`), input: { cart_id: cartId, items: [{ variant_id: bought.v.variant_id, quantity: 1 }] }, result: { status: 'READY' }, catalog_snapshot_sha256: snapSha });
   } else {
     add('merchant.cart.created', { cart_id: cartId, status: 'READY', lines: [lineOf(bought)], validation_issues: [], catalog_snapshot: { sha256: snapSha } });
-    add('agent.tool_call', { tool: 'create_cart', reasoning: reason('create_cart', `${bought.l.name} matches every mandate attribute.`), input: { items: [{ variant_id: bought.v.variant_id, quantity: 1 }] }, result: { status: 'READY' }, catalog_snapshot_sha256: snapSha });
+    add('agent.tool_call', { tool: 'create_cart', reasoning: reason('create_cart', `${bought.l.name} matches every attribute in the instructions.`), input: { items: [{ variant_id: bought.v.variant_id, quantity: 1 }] }, result: { status: 'READY' }, catalog_snapshot_sha256: snapSha });
   }
 
-  const fwLine: FirewallLine = { variant_id: bought.v.variant_id, listing_id: bought.l.listing_id, name: bought.l.name, brand: bought.l.brand, category: bought.l.category, quantity: 1, unit_price_cents: Math.round(Number(bought.v.price.value) * 100), attributes: bought.v.attributes };
+  const requested = f.purchase.path === 'substitute' ? find(f.purchase.requested!) : null;
+  const fwLine: FirewallLine = {
+    variant_id: bought.v.variant_id,
+    listing_id: bought.l.listing_id,
+    name: bought.l.name,
+    brand: bought.l.brand,
+    category: bought.l.category,
+    quantity: 1,
+    unit_price_cents: Math.round(Number(bought.v.price.value) * 100),
+    attributes: bought.v.attributes,
+    substituted_for: requested ? { variant_id: requested.v.variant_id, listing_id: requested.l.listing_id, hotel: requested.v.attributes.stay?.hotel, check_in: requested.v.attributes.stay?.check_in } : undefined,
+  };
   const firewall = runFirewall({ spec, mandate_status: 'ACTIVE', expires_at: mandate.expires_at, history: { spent_cents: 0, orders_placed: 0, units_bought: 0 }, cart: { currency: 'USD', total_cents: fwLine.unit_price_cents, lines: [fwLine] }, merchant: snap.merchant, agent: null, now: new Date(t) });
   const fwEntry = add('checkout.firewall', { cart_id: cartId, decision: firewall.decision, warnings: firewall.warnings, violations: firewall.violations, checks: firewall.checks, catalog_snapshot_sha256: snapSha });
   const orderRef = `RCS-SC-${f.id}`;
@@ -177,7 +222,8 @@ export function buildFixtureMaterial(f: Fixture, now = new Date()): CaseMaterial
   const captureId = `CAP-SC-${f.id}`;
   add('paypal.order.created', { order_ref: orderRef, http: 201, status: 'COMPLETED' });
   add('paypal.anchor.verified', { all_match: true });
-  add('paypal.tracker.added', { http: 201, tracking_number: `TRK-${f.id}` });
+  if (travel) add('merchant.booking.confirmed', { merchant: TRAVEL_MERCHANT.name, booking_ref: `TWS-SC-${f.id}`, rate: bought.l.name, hotel: bought.v.attributes.stay?.hotel, check_in: bought.v.attributes.stay?.check_in, check_out: bought.v.attributes.stay?.check_out, paypal_capture_id: captureId });
+  else add('paypal.tracker.added', { http: 201, tracking_number: `TRK-${f.id}` });
   add('checkout.completed', { order_ref: orderRef, paypal_capture_id: captureId, amount: { currency_code: 'USD', value: line.price } });
   let ackHash: string | null = null;
   if (f.receipt === 'CONFIRMED') {
@@ -187,8 +233,9 @@ export function buildFixtureMaterial(f: Fixture, now = new Date()): CaseMaterial
     add('buyer.receipt.confirmed', { ...doc, acknowledgement_hash: s.hash, signature: s.signature });
   }
   if (f.carrier_note) add('carrier.note', { text: f.carrier_note });
+  if (f.cancellation_refused) add('merchant.cancellation.refused', { merchant: TRAVEL_MERCHANT.name, rate: bought.l.name, reason: f.cancellation_refused });
   if (f.buyer_report) add('buyer.issue.reported', { order_ref: orderRef, description: f.buyer_report });
-  if (f.operator_statement) add('operator.statement', { author: 'Acme Ops', text: f.operator_statement });
+  if (f.operator_statement) add('operator.statement', { author: opsAuthor, text: f.operator_statement });
 
   const material: CaseMaterial = {
     kind: 'fixture',
@@ -201,7 +248,7 @@ export function buildFixtureMaterial(f: Fixture, now = new Date()): CaseMaterial
       dispute: f.dispute ? { id: `PP-D-SC-${f.id}`, reason: f.dispute.reason, status: 'OPEN', buyer_notes: f.dispute.buyer_notes } : null,
     },
     mandate,
-    agent: { name: 'Acme Shopper', version: f.purchase.path === 'substitute' ? '1.3' : '2.0', operator_name: 'Acme Shopping Agents' },
+    agent: { name: agentName, version: f.purchase.path === 'substitute' ? '1.3' : '2.0', operator_name: operatorName },
     order: {
       order_ref: orderRef,
       lines: [line],
@@ -212,7 +259,7 @@ export function buildFixtureMaterial(f: Fixture, now = new Date()): CaseMaterial
       anchor_seq: started.seq,
       anchor_head_hash: started.hash,
       anchor_description: `RCS-ANCHOR ${started.hash}`,
-      tracker_id: `TRK-${f.id}`,
+      tracker_id: travel ? null : `TRK-${f.id}`,
       compliance,
       firewall,
       paypal_order_id: `PPO-SC-${f.id}`,
@@ -224,8 +271,8 @@ export function buildFixtureMaterial(f: Fixture, now = new Date()): CaseMaterial
     recorder: { entries, checkpoints },
     snapshot: { id: `SNAP-${f.id}`, sha256_stored: snapSha, snapshot: snap },
     receipt: { status: f.receipt === 'CONFIRMED' ? 'CONFIRMED' : f.buyer_report ? 'ISSUE_REPORTED' : 'PENDING', acknowledgement_hash: ackHash },
-    statements: f.operator_statement ? [{ party: 'OPERATOR', author: 'Acme Ops', text: f.operator_statement, created_at: new Date(t) }] : [],
-    delivery: { tracking_number: `TRK-${f.id}`, carrier_note: f.carrier_note ?? null },
+    statements: f.operator_statement ? [{ party: 'OPERATOR', author: opsAuthor, text: f.operator_statement, created_at: new Date(t) }] : [],
+    delivery: travel ? { tracking_number: null, carrier_note: f.carrier_note ?? null } : { tracking_number: `TRK-${f.id}`, carrier_note: f.carrier_note ?? null },
   };
 
   // Tampering, applied after everything was signed and hashed

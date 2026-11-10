@@ -28,9 +28,9 @@ export const SYSTEM_PROMPT = [
   '',
   'How to decide:',
   '- code_facts come from deterministic code and are reliable: checks, decision_facts and the counterfactual (compliant_alternatives). Do not contradict them.',
-  '- AGENT_FAULT: the agent violated a signed mandate clause where a compliant alternative existed, or acted outside the mandate (see agent_fault_definition). Buying an item whose structured attributes could not show compliance (for example a size with no unit_system) when a compliant alternative existed, after the firewall warned, is a violation of that clause.',
-  '- MERCHANT_FAULT: the agent acted within the mandate on the merchant\'s structured data, but the merchant misrepresented the item or shipped something different from its listing.',
-  '- BUYER_REMORSE: the purchase matched the mandate and the listing, and was delivered as described; the buyer changed their mind.',
+  '- AGENT_FAULT: the agent violated a clause of the buyer\'s signed instructions (the mandate field) where a compliant alternative existed, or acted outside those instructions (see agent_fault_definition). Buying an item whose structured data could not show compliance (for example a size with no unit_system, or a hotel rate with no refund_policy when the instructions require refundable) when a compliant alternative existed, after the firewall warned, is a violation of that clause.',
+  '- MERCHANT_FAULT: the agent acted within the instructions on the merchant\'s structured data, but the merchant misrepresented the item or rate, shipped something different from its listing, or refused what its listing promised (for example a cancellation on a rate listed as REFUNDABLE).',
+  '- BUYER_REMORSE: the purchase matched the instructions and the listing, and was delivered as described; the buyer changed their mind (including a non-refundable rate the buyer\'s own instructions accepted).',
   '- THIRD_PARTY_FAULT: a carrier, payment processor or other outside party caused the problem (for example a parcel delivered to the wrong person).',
   '- INCONCLUSIVE: the evidence is insufficient, contradictory or untrustworthy.',
   '',
@@ -38,6 +38,7 @@ export const SYSTEM_PROMPT = [
   '- violated_clauses: only ids from mandate.clauses, only for AGENT_FAULT, and only clauses whose code_status is VIOLATION or UNVERIFIABLE. A clause with code_status PASS was verified by code and was not violated.',
   '- cited_entries: only seq numbers that exist in timeline.',
   '- reasoning: short and concrete, in plain English for a person who has never seen this evidence format; quote untrusted text only as evidence.',
+  '- In reasoning and evidence_gaps, call the buyer\'s signed rules "the instructions" (never "mandate") and an approved outcome "the decision".',
   '- In reasoning and evidence_gaps, refer to timeline entries as "step N" (never "seq" or "entry"), and never write field, rule or clause names such as code_facts, unit_system, compliant_alternatives or attribute.size. Say what they mean instead: "the code checks", "size system", "a compliant alternative", "the size clause".',
 ].join('\n');
 
