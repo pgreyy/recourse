@@ -307,6 +307,15 @@ tunnel. Every event below verified **SUCCESS** with `verify-webhook-signature`.
 - `usage_pattern IMMEDIATE` was enough for a later payer-not-present charge. `UNSCHEDULED_POSTPAID`
   was not tried.
 
+### Later observation (Phase 1 run, same day): vault tokens are reused
+
+When the same payer approves a new setup token for the same merchant, PayPal returns the **same**
+payment token. The Phase 1 mandate approval (setup token `6RX205807W125914F`) produced vault_id
+`44895230px387883m`, the buyer's token from probe 2; the operator approval (setup token
+`9BX25719GB508864M`) produced `4u278207n6328905y`, the operator's token from probe 8. Recourse
+therefore keeps one `payment_tokens` row per authorization and lets several rows share a vault_id
+(migration `003_shared_vault_tokens.sql`).
+
 ---
 
 ## Open questions for Phase 1
