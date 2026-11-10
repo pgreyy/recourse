@@ -8,32 +8,57 @@ import { ConfigError, env, required } from '../../config';
 export const PROVIDERS = ['gemini', 'openai', 'anthropic'] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
-type Candidate = { model: LanguageModel; provider: Provider; modelId: string; role: 'primary' | 'fallback' };
+export type Candidate = {
+  model: LanguageModel;
+  provider: Provider;
+  modelId: string;
+  /** 'primary', 'fallback 1', 'fallback 2', ... */
+  role: string;
+  /** Provider-specific options, e.g. minimal reasoning effort for OpenAI reasoning models. */
+  providerOptions?: Record<string, Record<string, string | number | boolean>>;
+};
 
-function build(provider: Provider, apiKey: string, modelId: string): LanguageModel {
+function build(provider: Provider, apiKey: string, modelId: string): Omit<Candidate, 'role'> {
   switch (provider) {
     case 'gemini':
-      return createGoogleGenerativeAI({ apiKey })(modelId);
+      return { model: createGoogleGenerativeAI({ apiKey })(modelId), provider, modelId };
     case 'openai':
-      return createOpenAI({ apiKey })(modelId);
+      return {
+        model: createOpenAI({ apiKey })(modelId),
+        provider,
+        modelId,
+        // gpt-5* and o* are reasoning models: keep reasoning minimal so calls stay cheap and fast.
+        providerOptions: /^(gpt-5|o\d)/.test(modelId) ? { openai: { reasoningEffort: 'minimal' } } : undefined,
+      };
     case 'anthropic':
-      return createAnthropic({ apiKey })(modelId);
+      return { model: createAnthropic({ apiKey })(modelId), provider, modelId };
   }
 }
 
-/** AI_MODEL, then AI_FALLBACK_MODEL if set, both on AI_PROVIDER with AI_API_KEY. */
+/**
+ * The model chain, in the order they are tried.
+ *   Main provider (AI_PROVIDER, AI_API_KEY): AI_MODEL, then AI_FALLBACK_MODEL.
+ *   OpenAI (OPENAI_API_KEY, AI_OPENAI_MODEL): last resort by default; first when AI_PRIMARY=openai.
+ */
 export function candidateModels(): Candidate[] {
   const provider = env('AI_PROVIDER')?.toLowerCase() as Provider | undefined;
   if (!provider || !PROVIDERS.includes(provider)) throw new ConfigError(`AI_PROVIDER must be one of ${PROVIDERS.join(', ')}`);
   const apiKey = required('AI_API_KEY');
-  const primary = required('AI_MODEL');
-  const out: Candidate[] = [{ model: build(provider, apiKey, primary), provider, modelId: primary, role: 'primary' }];
+  const main: Array<Omit<Candidate, 'role'>> = [build(provider, apiKey, required('AI_MODEL'))];
   const fallback = env('AI_FALLBACK_MODEL');
-  if (fallback && fallback !== primary) out.push({ model: build(provider, apiKey, fallback), provider, modelId: fallback, role: 'fallback' });
-  return out;
+  if (fallback && fallback !== main[0].modelId) main.push(build(provider, apiKey, fallback));
+
+  const openaiKey = env('OPENAI_API_KEY');
+  const openaiModel = env('AI_OPENAI_MODEL');
+  const openai = openaiKey && openaiModel ? [build('openai', openaiKey, openaiModel)] : [];
+
+  const primary = (env('AI_PRIMARY') ?? provider).toLowerCase();
+  if (primary === 'openai' && !openai.length) throw new ConfigError('AI_PRIMARY=openai needs OPENAI_API_KEY and AI_OPENAI_MODEL');
+  const ordered = primary === 'openai' ? [...openai, ...main] : [...main, ...openai];
+  return ordered.map((c, i) => ({ ...c, role: i === 0 ? 'primary' : `fallback ${i}` }));
 }
 
-/** Why a model failed, in a few words; and whether that failure should move on to the fallback model. */
+/** Why a model failed, in a few words; and whether that failure should move on to the next model. */
 export function classifyLlmError(e: unknown): { fallback: boolean; reason: string } {
   const last = RetryError.isInstance(e) ? e.lastError : e;
   const err = last as { name?: string; message?: string };
@@ -48,14 +73,45 @@ export function classifyLlmError(e: unknown): { fallback: boolean; reason: strin
   return { fallback: false, reason: String(err?.message ?? e).slice(0, 120) };
 }
 
-export type ObjectResult<T> = { output: T; provider: Provider; modelId: string; fallbackUsed: boolean; primaryFailure?: string };
+export type Answered = { provider: Provider; modelId: string; role: string; fallbackUsed: boolean; failures: string[] };
 
 /**
- * Structured output with automatic fallback. Each model gets one retry (the AI SDK retries
- * retryable API errors once). If the primary still fails because it is overloaded, returns a 5xx or
- * times out, the same request goes to AI_FALLBACK_MODEL. Any other error (bad key, invalid request,
- * schema mismatch) is thrown as is. Logs which model answered.
+ * Run `fn` against each model in the chain until one answers. Each model gets one retry inside `fn`
+ * (maxRetries: 1). A model that is still overloaded, returns a 5xx or times out hands over to the
+ * next; any other error is thrown as is. `canFallback` lets a caller refuse to switch models once
+ * something irreversible has happened (e.g. an agent already created a cart). Logs who answered.
  */
+export async function runWithFallback<T>(
+  task: string,
+  fn: (c: Candidate) => Promise<T>,
+  opts: { canFallback?: () => boolean } = {},
+): Promise<{ value: T } & Answered> {
+  const chain = candidateModels();
+  const failures: string[] = [];
+  for (let i = 0; i < chain.length; i++) {
+    const c = chain[i];
+    const started = Date.now();
+    try {
+      const value = await fn(c);
+      console.log(
+        `llm ${task}: answered by ${c.provider}/${c.modelId} (${c.role}) in ${Date.now() - started} ms` +
+          (failures.length ? `; earlier: ${failures.join('; ')}` : ''),
+      );
+      return { value, provider: c.provider, modelId: c.modelId, role: c.role, fallbackUsed: i > 0, failures };
+    } catch (e) {
+      const why = classifyLlmError(e);
+      console.error(`llm ${task}: ${c.provider}/${c.modelId} (${c.role}) failed after one retry: ${why.reason}`);
+      failures.push(`${c.modelId}: ${why.reason}`);
+      const last = i === chain.length - 1;
+      if (!why.fallback || last || (opts.canFallback && !opts.canFallback())) throw e;
+    }
+  }
+  throw new Error('unreachable');
+}
+
+export type ObjectResult<T> = { output: T } & Answered;
+
+/** Structured output through the model chain. */
 export async function generateObjectWithFallback<S extends z.ZodType>(opts: {
   task: string;
   system: string;
@@ -63,31 +119,18 @@ export async function generateObjectWithFallback<S extends z.ZodType>(opts: {
   schema: S;
   timeoutMs?: number;
 }): Promise<ObjectResult<z.infer<S>>> {
-  const candidates = candidateModels();
-  let primaryFailure: string | undefined;
-  for (let i = 0; i < candidates.length; i++) {
-    const c = candidates[i];
-    const started = Date.now();
-    try {
-      const result = await generateText({
-        model: c.model,
-        system: opts.system,
-        prompt: opts.prompt,
-        output: Output.object({ schema: opts.schema }),
-        maxRetries: 1,
-        abortSignal: AbortSignal.timeout(opts.timeoutMs ?? 40_000),
-      });
-      console.log(
-        `llm ${opts.task}: answered by ${c.provider}/${c.modelId} (${c.role}) in ${Date.now() - started} ms` +
-          (primaryFailure ? `; primary ${candidates[0].modelId} failed: ${primaryFailure}` : ''),
-      );
-      return { output: result.output as z.infer<S>, provider: c.provider, modelId: c.modelId, fallbackUsed: c.role === 'fallback', primaryFailure };
-    } catch (e) {
-      const why = classifyLlmError(e);
-      console.error(`llm ${opts.task}: ${c.provider}/${c.modelId} (${c.role}) failed after one retry: ${why.reason}`);
-      if (i === 0) primaryFailure = why.reason;
-      if (!why.fallback || i === candidates.length - 1) throw e;
-    }
-  }
-  throw new Error('unreachable');
+  const r = await runWithFallback(opts.task, async (c) => {
+    const result = await generateText({
+      model: c.model,
+      system: opts.system,
+      prompt: opts.prompt,
+      output: Output.object({ schema: opts.schema }),
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(opts.timeoutMs ?? 40_000),
+      providerOptions: c.providerOptions,
+    });
+    return result.output as z.infer<S>;
+  });
+  const { value, ...answered } = r;
+  return { output: value, ...answered };
 }

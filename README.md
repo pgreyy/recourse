@@ -21,6 +21,10 @@ API key for one LLM provider (Gemini, OpenAI or Anthropic).
    - `BUYER_EMAIL`, `OPERATOR_EMAIL`: two sandbox personal accounts
    - `DATABASE_URL`: Postgres connection string (`?sslmode=require` for Neon)
    - `AI_PROVIDER` (`gemini`, `openai` or `anthropic`), `AI_MODEL`, `AI_API_KEY`
+   - Optional fallbacks: `AI_FALLBACK_MODEL` (second model, same provider), then OpenAI as the last
+     resort with `OPENAI_API_KEY` and `AI_OPENAI_MODEL`. `AI_PRIMARY=openai` tries OpenAI first.
+     A model that is overloaded, times out or returns a 5xx (after one retry) hands over to the next;
+     the server log names the model that answered.
 3. Signing key: `npm run keygen -- --append` writes `RECOURSE_SIGNING_KEY` into `.env`
    (`npm run keygen` alone prints the line instead). It signs mandates; keep it secret.
 4. Database: `npm run migrate` (creates the tables), then `npm run seed` (loads the Stride & Co
