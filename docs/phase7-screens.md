@@ -4,9 +4,12 @@ A React and TypeScript app (Vite) in `web/`, served by the API at `/app`. Every 
 comes from the API, the database or a live PayPal read; nothing is mocked. Screenshots are in
 [screenshots/](screenshots/).
 
-The screenshots show the hotel demo (Tidewell Stays, Wayfare Agents) and are taken from a local copy of the database
-loaded from Neon, except the scorecard, taken from the hosted demo (its latest run is there). Screens that need a real booking (receipt, case detail, settlement, the operator's view of a decision,
-the Clerk on a case) are taken after the live hotel run on the hosted demo.
+The screenshots show the hotel demo (Tidewell Stays, Wayfare Agents). Those with a booking, a case or a settlement
+(agent run, receipt, overview, cases, case detail, settlement, agents, settlements, the operator's view of a decision,
+the Clerk, the phone case and agent run) and the scorecard are from the hosted demo after the live run of
+`CASE-20261110-A20E6BFF` on 2026-11-10; the operator's view was taken before the operator accepted, so it still shows
+Accept and Appeal. Home, operator onboarding, buyer instructions, sidebar collapsed and the phone menu and overview
+are from a local copy of the database.
 
 | Screen | Path | Screenshot |
 |---|---|---|
@@ -17,7 +20,7 @@ the Clerk on a case) are taken after the live hotel run on the hosted demo.
 | Receipt (server page, restyled) | `/r/<token>` | `04-receipt.png`, `04b-receipt-phone.png` (390 px wide) |
 | Console: overview | `/app/console` | `05-console-overview.png` |
 | Console: cases | `/app/console?page=cases` | `06-cases-grouped-by-verdict.png`, `06b-cases-drawer.png` |
-| Console: case detail and settlement | `/app/console?page=case&case=<id>` | `07-case-detail.png`, `08-settlement-recovered.png`, `08b-settlement-dispute.png` |
+| Console: case detail and settlement | `/app/console?page=case&case=<id>` | `07-case-detail.png`, `08-settlement-recovered.png` |
 | Console: agents and operators | `/app/console?page=agents` | `09-agents-operators.png` |
 | Console: scorecard | `/app/console?page=scorecard` | `10-scorecard.png` |
 | Operator's view of a decision | `/app/operator/decision?case=<id>` | `15-operator-decision.png` |

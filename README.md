@@ -18,10 +18,13 @@ A working prototype on the **PayPal sandbox**, built for the PayPal AI Hackathon
 (Tidewell Stays, a fictional hotel booking site), one covered operator with two booking agents, and one uncovered
 operator. **It does not move real money, and it does not change how PayPal decides disputes.**
 
-![A rehearsal (dry run) of Wayfare Booker v1.3: the refundable rate is sold out, the agent takes the suggested rate with no refund policy, and the firewall warns](docs/screenshots/03-agent-run.png)
+![Case detail: what was authorised, what the agent did (warned at step 12, proceeded at step 13), and the decision with its counterfactual](docs/screenshots/07-case-detail.png)
 
-Screenshots of the case detail and the settlement are added after the live hotel run on the hosted demo; every other
-screen is in [docs/screenshots/](docs/screenshots/), described in [docs/phase7-screens.md](docs/phase7-screens.md).
+![Settlement: the buyer refund and the operator charge with their PayPal ids, both confirmed, and who paid what](docs/screenshots/08-settlement-recovered.png)
+
+![Agent run: the refundable rate is sold out, the agent takes the suggested rate with no refund policy, the firewall warns, and the booking goes ahead](docs/screenshots/03-agent-run.png)
+
+Every other screen is in [docs/screenshots/](docs/screenshots/), described in [docs/phase7-screens.md](docs/phase7-screens.md).
 
 Contents: [The problem](#the-problem) · [What is new](#what-is-new) · [Try it](#try-it) · [Code or AI](#what-code-decides-and-what-the-ai-decides) ·
 [How it works](#how-it-works) · [AG Grid and AG Studio](#ag-grid-and-ag-studio) · [Evidence](#evidence) · [PayPal APIs](#paypal-apis-used) ·
@@ -138,10 +141,24 @@ What is implemented, on AG Studio 3.1 and AG Grid 36 (Enterprise features, trial
 
 ## Evidence
 
-- **The hotel demo, rehearsed.** Dry runs (nothing charged) on gpt-5-nano on 2026-11-10: Wayfare Booker v1.3 took the
-  merchant's Flexible Saver suggestion in 3 of 3 runs, and the firewall warned on the missing refund policy; Wayfare
-  Booker v2.0 refused it and booked Hotel Ribeira Alta's refundable rate in 1 of 1. The live run's PayPal ids (order,
-  capture, buyer refund, operator charge) are added here after it runs on the hosted demo.
+Every id below is a PayPal sandbox id from a run on the hosted demo on 2026-11-10 (UTC).
+
+- **Scenario A, agent fault, recovered** (case `CASE-20261110-A20E6BFF`). Wayfare Booker v1.3 booked Casa Lumen's
+  Flexible Saver rate (no refund policy) after the firewall warned at step 12 and it proceeded at step 13: PayPal order
+  `11F82770V8738410J`, capture `8L037640DL311431U`, 340.00 USD, booking confirmation TWS-C62E0A. All 11 evidence
+  checks passed, including the decision log's head hash read back from the PayPal order. Tidewell Stays refused the
+  cancellation (the rate is non-refundable); the buyer reported it on the receipt. The assessment found AGENT_FAULT on
+  clause `stay.refund_policy`, with Hotel Ribeira Alta's refundable rate (380.00) available at the decision step. After
+  a person approved the decision and the operator accepted it: buyer refund `6M826989RN0922432` (340.00 USD, confirmed
+  by a re-read from PayPal); operator charged order `71R16486NJ703452D`, capture `7EW87576HA7150919`, 352.36 USD (the
+  refund plus the 12.36 USD PayPal fee the refund did not return), confirmed by webhook. Who paid what: buyer
+  refunded 340.00, merchant net 0.00 (PayPal's 12.79 USD fee on the recovery charge is shown as not recovered),
+  operator charged 352.36, 647.64 USD left of its 1,000.00 USD cap. v1.3 then moved to step-up ("recent confirmed agent
+  fault").
+- **A failed attempt, recorded as it happened.** The first live v1.3 run (agent run `2aa9bb55`) took the same trap but
+  mistyped the cart id at checkout, so nothing was booked or charged; the run above was the second attempt.
+- **Rehearsals.** Dry runs (nothing charged) on gpt-5-nano on 2026-11-10: v1.3 took the Flexible Saver suggestion in
+  3 of 3 runs; v2.0 refused it and booked Hotel Ribeira Alta's refundable rate in 1 of 1.
 - **Scorecard: an internal, labelled 34-case evaluation set** (24 retail, 10 travel), run through the same pipeline as
   live cases. It is evidence of behaviour on known cases, not production accuracy. gpt-5-mini, prompt hash
   `0da0a61218a5`, scorecard run `628d51ab` on 2026-11-10:
@@ -157,7 +174,9 @@ What is implemented, on AG Studio 3.1 and AG Grid 36 (Enterprise features, trial
 - **Prompt injection.** Instruction-like text in a rate description and in an operator statement is flagged by code;
   every injection case in the run above got the expected verdict.
 - **The Clerk's money facts.** A server check rejects any Clerk answer whose amounts, PayPal ids or refund claims are
-  not in that answer's tool results ([docs/clerk-checks.md](docs/clerk-checks.md)).
+  not in that answer's tool results. On the scenario A case, three check questions ("is it refunded?", "how much was
+  recovered from Wayfare Agents?", "refund it") passed, and the Clerk refused to refund
+  ([docs/clerk-checks.md](docs/clerk-checks.md) has the real answers).
 - **Disputes.** A PayPal dispute opens a case through the webhook; Recourse escalates it and files an evidence PDF with
   PayPal (tested in the sandbox on 2026-11-10: `provide-evidence` HTTP 200, debug id `f500488ac13f0`).
 - **Webhooks on the hosted demo.** A resent, signed PayPal event was received and verified by the Render service
