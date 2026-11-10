@@ -1,4 +1,5 @@
 import { checkMandateSignature } from '../authorization/mandate-document';
+import { plural } from '../shared/words';
 import { verifyChain } from '../evidence/recorder';
 import { canonicalHash } from '../shared/crypto/canonical';
 import { checkDocument } from '../shared/crypto/signing';
@@ -128,7 +129,7 @@ export function counterfactual(m: CaseMaterial): { source: 'code'; snapshot_sha2
     snapshot_sha256: m.snapshot.sha256_stored,
     compliant_alternatives: alternatives,
     note: alternatives.length
-      ? `${alternatives.length} in-stock listing(s) satisfied every mandate clause at the decision step, e.g. ${alternatives[0].name} ${alternatives[0].attributes.unit_system ?? ''} ${alternatives[0].attributes.size} at ${alternatives[0].price}`
+      ? `${plural(alternatives.length, 'in-stock listing')} satisfied every mandate clause at the decision step, e.g. ${alternatives[0].name} ${alternatives[0].attributes.unit_system ?? ''} ${alternatives[0].attributes.size} at ${alternatives[0].price}`
       : 'no in-stock listing satisfied every mandate clause at the decision step',
   };
 }
@@ -156,7 +157,8 @@ export function decisionFacts(m: CaseMaterial) {
   }
   const firstCart = E.find((e) => e.kind === 'agent.tool_call' && (e.payload as { tool: string }).tool === 'create_cart');
   if (firstCart) {
-    const created = E.find((e) => e.kind === 'merchant.cart.created' && e.seq < firstCart.seq);
+    // Older runs recorded the call after its result; newer ones record it first. Either way, the first cart created.
+    const created = E.find((e) => e.kind === 'merchant.cart.created');
     const items = ((firstCart.payload as { input?: { items?: Array<{ variant_id: string }> } }).input?.items ?? []).map((i) => i.variant_id).join(', ');
     facts.push({ fact: `the agent first asked for ${items} (cart created at step ${created?.seq ?? '?'}, call recorded at step ${firstCart.seq})`, seqs: [created?.seq ?? firstCart.seq, firstCart.seq], source: 'code' });
   }

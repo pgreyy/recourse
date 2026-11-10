@@ -4,12 +4,18 @@ A React and TypeScript app (Vite) in `web/`, served by the API at `/app`. Every 
 comes from the API, the database or a live PayPal read; nothing is mocked. Screenshots are in
 [screenshots/](screenshots/).
 
+The screenshots were retaken on 2026-11-10, after the demo reset, from a local copy of the database
+(a `pg_dump` of Neon loaded into Postgres 18) with scenarios A and B restored from the archive and A's
+reputation included. The agent run (`03`) is a dry run of Acme Shopper v1.3 on a draft mandate: a live
+run needs the buyer's approval at PayPal. The Clerk answers (`11`, `11b`) are real gpt-5-nano answers
+on that copy. Neon itself holds the clean demo (no cases).
+
 | Screen | Path | Screenshot |
 |---|---|---|
 | Operator onboarding | `/app/operator` | `01-operator-onboarding.png` |
 | Buyer mandate | `/app/buyer` | `02-buyer-mandate.png`, `02b-buyer-new-mandate.png` |
 | Agent run | `/app/agent?run=<id>` | `03-agent-run.png` |
-| Receipt (server page, restyled) | `/r/<token>` | `04-receipt.png` |
+| Receipt (server page, restyled) | `/r/<token>` | `04-receipt.png`, `04b-receipt-phone.png` (390 px wide) |
 | Console: overview | `/app/console` | `05-console-overview.png` |
 | Console: cases | `/app/console?page=cases` | `06-cases-grouped-by-verdict.png`, `06b-cases-drawer.png` |
 | Console: case detail and settlement | `/app/console?page=case&case=<id>` | `07-case-detail.png`, `08-settlement-recovered.png`, `08b-settlement-dispute.png` |
@@ -29,10 +35,13 @@ comes from the API, the database or a live PayPal read; nothing is mocked. Scree
 
 ## The console on AG Studio
 
-- AG Studio in **view mode** with five pages (overview, cases, case, agents, scorecard), all built
-  from custom widgets (`web/src/console/widgets.tsx`). The overview is a grid layout of four
-  widgets; the other pages are standalone widgets.
-- The case list also feeds Studio's data engine as a `cases` data source.
+- AG Studio in **view mode** with five pages (overview, cases, case, agents, scorecard).
+- The overview is built from AG Studio's own widgets on Studio data tables (`cases`, `headline`,
+  `exposure`, loaded from the API when the console opens), styled by the console theme: six `value`
+  tiles, a `column-chart-stacked` integrated chart ("Recovered vs pending by agent version", named
+  measures so the legend reads Recovered and Pending) and a `grid` widget for operator exposure.
+  "Needs a decision" is a custom widget with an AG Grid in the same theme, so a row opens its case.
+- The other pages are custom widgets (`web/src/console/widgets.tsx`).
 - The cases grid and the scorecard are AG Grid (Enterprise) inside custom widgets: set filters,
   floating filters, row grouping by verdict or agent (group rows sum amount and recovered), and a
   detail drawer.

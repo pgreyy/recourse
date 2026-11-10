@@ -9,6 +9,7 @@ import { ClerkTurn, clerkTurn } from './clerk';
 import { env } from '../config';
 import { aiBudget } from '../shared/ai/budget';
 import { agentsAndOperators, caseContext, caseRows, overview, recoveredByAgentVersion, runView } from './queries';
+import { plainText } from './plain';
 
 /** Read-only endpoints for the screens and the Clerk (plus the Clerk's model turn). */
 export const consoleRoutes = Router();
@@ -36,7 +37,7 @@ async function caseDetail(cs: CaseRow, force: boolean) {
     verification = { evidence: cached.evidence, disputes: cached.disputes, verified_at: cached.verified_at, cached: true };
   } else {
     const { evidence_pack, ...checks } = await caseEvidence(cs);
-    const evidence = { ...checks, clauses: (evidence_pack as any)?.mandate?.clauses ?? [] };
+    const evidence = { ...checks, clauses: ((evidence_pack as any)?.mandate?.clauses ?? []).map((c: { text: string }) => ({ ...c, text: plainText(c.text) })) };
     const disputes: Record<string, unknown> = {};
     for (const o of obs.filter((x) => x.workflow === 'B')) disputes[o.id] = (await settlementView(o.id, true)).paypal_dispute;
     const at = new Date();

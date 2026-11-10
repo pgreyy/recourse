@@ -1,7 +1,7 @@
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, GridApi, RowClickedEvent } from 'ag-grid-community';
 import { useMemo, useRef, useState } from 'react';
-import { api, ErrorNote, Id, money, navigate, SettlementStatus, Status, useLoad, Verdict, verdictLabel, when } from '../lib';
+import { api, ErrorNote, Id, money, navigate, plural, SettlementStatus, shortWhen, Status, useLoad, Verdict, verdictLabel } from '../lib';
 import { gridTheme } from './gridTheme';
 import { nextStep } from './Overview';
 
@@ -31,11 +31,11 @@ export function CasesGrid() {
   );
   const cols = useMemo<ColDef[]>(
     () => [
-      { colId: 'case', headerName: 'Case and order', valueGetter: (p) => p.data?.case_ref, minWidth: 185, pinned: 'left', cellRenderer: (p: any) => (p.data ? two(p.data.case_ref, p.data.order_ref, true) : null) },
+      { colId: 'case', headerName: 'Case', headerTooltip: 'Case reference, then the order', valueGetter: (p) => p.data?.case_ref, minWidth: 190, pinned: 'left', cellRenderer: (p: any) => (p.data ? two(p.data.case_ref, p.data.order_ref, true) : null) },
       { colId: 'order', headerName: 'Order', field: 'order_ref', hide: true },
-      { colId: 'agent', headerName: 'Agent and operator', valueGetter: (p) => (p.data ? p.data.agent ?? 'No agent' : undefined), rowGroup: group === 'agent', hide: group === 'agent', filter: 'agSetColumnFilter', minWidth: 160, cellRenderer: (p: any) => (p.data ? two(p.value, p.data.operator) : p.value ?? null) },
+      { colId: 'agent', headerName: 'Agent', headerTooltip: 'Agent version, then its operator', valueGetter: (p) => (p.data ? p.data.agent ?? 'No agent' : undefined), rowGroup: group === 'agent', hide: group === 'agent', filter: 'agSetColumnFilter', minWidth: 150, cellRenderer: (p: any) => (p.data ? two(p.value, p.data.operator) : p.value ?? null) },
       { colId: 'operator', headerName: 'Operator', valueGetter: (p) => p.data?.operator ?? '—', filter: 'agSetColumnFilter', hide: true },
-      { colId: 'amount', headerName: 'Amount', type: 'rightAligned', headerTooltip: 'Group rows show the sum', valueGetter: (p) => (p.data?.amount ? Number(p.data.amount.value) : null), valueFormatter: (p) => (p.data?.amount ? money(p.data.amount) : p.value != null ? p.value.toFixed(2) : ''), aggFunc: 'sum', filter: 'agNumberColumnFilter', minWidth: 100, maxWidth: 120 },
+      { colId: 'amount', headerName: 'Amount', type: 'rightAligned', headerTooltip: 'Group rows show the sum', valueGetter: (p) => (p.data?.amount ? Number(p.data.amount.value) : null), valueFormatter: (p) => (p.data?.amount ? money(p.data.amount) : p.value != null ? p.value.toFixed(2) : ''), aggFunc: 'sum', filter: 'agNumberColumnFilter', minWidth: 104, maxWidth: 120 },
       {
         colId: 'verdict',
         headerName: 'Verdict',
@@ -43,13 +43,13 @@ export function CasesGrid() {
         rowGroup: group === 'verdict',
         hide: group === 'verdict',
         filter: 'agSetColumnFilter',
-        minWidth: 145,
+        minWidth: 140,
         cellRenderer: (p: any) => (p.data ? two0(<Verdict v={p.data.verdict} />, p.data.verdict_state === 'ASSESSED' ? 'proposed, not ruled' : p.data.verdict_state === 'RULED' ? 'ruling approved' : null) : p.value ?? null),
       },
-      { colId: 'evidence', headerName: 'Evidence', valueGetter: (p) => (p.data ? p.data.evidence?.label : undefined), filter: 'agSetColumnFilter', minWidth: 145, cellRenderer: (p: any) => (p.data ? <Status tone={EVIDENCE_TONE(p.value)}>{p.value}</Status> : null) },
-      { colId: 'settlement', headerName: 'Settlement', valueGetter: (p) => (p.data ? settlementLabel(p.data.settlement_status) : undefined), filter: 'agSetColumnFilter', minWidth: 160, cellRenderer: (p: any) => (p.data ? <SettlementStatus s={p.data.settlement_status} /> : null) },
-      { colId: 'recovered', headerName: 'Recovered', type: 'rightAligned', valueGetter: (p) => (p.data?.recovered ? Number(p.data.recovered.value) : p.data ? 0 : null), valueFormatter: (p) => (p.data ? (p.data.recovered ? money(p.data.recovered) : '—') : p.value != null ? p.value.toFixed(2) : ''), aggFunc: 'sum', minWidth: 108, maxWidth: 120 },
-      { colId: 'created', headerName: 'Created (UTC)', valueGetter: (p) => p.data?.created_at, valueFormatter: (p) => (p.value ? when(p.value).replace(' UTC', '') : ''), filter: 'agDateColumnFilter', sort: 'desc', minWidth: 125, maxWidth: 160 },
+      { colId: 'evidence', headerName: 'Evidence', valueGetter: (p) => (p.data ? p.data.evidence?.label : undefined), filter: 'agSetColumnFilter', minWidth: 140, cellRenderer: (p: any) => (p.data ? <Status tone={EVIDENCE_TONE(p.value)}>{p.value}</Status> : null) },
+      { colId: 'settlement', headerName: 'Settlement', valueGetter: (p) => (p.data ? settlementLabel(p.data.settlement_status) : undefined), filter: 'agSetColumnFilter', minWidth: 150, cellRenderer: (p: any) => (p.data ? <SettlementStatus s={p.data.settlement_status} /> : null) },
+      { colId: 'recovered', headerName: 'Recovered', type: 'rightAligned', valueGetter: (p) => (p.data?.recovered ? Number(p.data.recovered.value) : p.data ? 0 : null), valueFormatter: (p) => (p.data ? (p.data.recovered ? money(p.data.recovered) : '—') : p.value != null ? p.value.toFixed(2) : ''), aggFunc: 'sum', minWidth: 104, maxWidth: 120 },
+      { colId: 'created', headerName: 'Opened', headerTooltip: 'When the case was opened (UTC)', valueGetter: (p) => p.data?.created_at, valueFormatter: (p) => shortWhen(p.value), filter: 'agDateColumnFilter', floatingFilter: false, sort: 'desc', minWidth: 120, maxWidth: 130 },
     ],
     [group],
   );
@@ -77,8 +77,8 @@ export function CasesGrid() {
           rowData={r.data ?? []}
           loading={r.loading && !r.data}
           columnDefs={cols}
-          defaultColDef={{ flex: 1, filter: true, floatingFilter: true, sortable: true, resizable: true }}
-          autoGroupColumnDef={{ headerName: group === 'agent' ? 'Agent' : 'Verdict', minWidth: 190, pinned: 'left' }}
+          defaultColDef={{ flex: 1, filter: true, floatingFilter: true, sortable: true, resizable: true, wrapHeaderText: true, autoHeaderHeight: true, suppressHeaderMenuButton: true }}
+          autoGroupColumnDef={{ headerName: group === 'agent' ? 'Agent' : 'Verdict', minWidth: 170, pinned: 'left' }}
           groupDefaultExpanded={1}
           groupDisplayType="singleColumn"
           suppressAggFuncInHeader
@@ -135,7 +135,7 @@ function Drawer({ c, onClose }: { c: any; onClose: () => void }) {
         </dd>
         <dt>Evidence</dt>
         <dd>
-          {c.evidence.label}, {c.evidence.entries} recorder entries
+          {c.evidence.label}, {plural(c.evidence.entries, 'recorder entry', 'recorder entries')}
         </dd>
         <dt>Waiting for</dt>
         <dd>{step ?? 'Nothing, closed'}</dd>

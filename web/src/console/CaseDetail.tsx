@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, ErrorNote, Id, Modal, money, navigate, SettlementStatus, short, Status, useLoad, useLocation, Verdict, when, Who, maskEmail } from '../lib';
+import { api, ErrorNote, Id, Modal, money, navigate, SettlementStatus, short, Status, useLoad, useLocation, Verdict, when, Who, maskEmail, plural } from '../lib';
 import { Timeline, type Entry } from '../timeline';
 
 type Detail = {
@@ -255,7 +255,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
             )}
             {chain && (
               <p className="small muted row" style={{ gap: 6 }}>
-                <Status tone={chain.valid ? 'ok' : 'bad'}>{chain.valid ? 'Chain intact' : 'Chain broken'}</Status> {chain.entries} entries, {chain.checkpoints.count} signed checkpoints <Who by="code" />
+                <Status tone={chain.valid ? 'ok' : 'bad'}>{chain.valid ? 'Chain intact' : 'Chain broken'}</Status> {plural(chain.entries, 'entry', 'entries')}, {plural(chain.checkpoints.count, 'signed checkpoint')} <Who by="code" />
               </p>
             )}
             <Snapshot order={order} cf={counterfactual} />
@@ -285,7 +285,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
                   {a.violated_clauses.length ? (
                     a.violated_clauses.map((v: string) => (
                       <p key={v}>
-                        <span className="mono">{v}</span>: {clauses.find((cl) => cl.id === v)?.text ?? ''}
+                        {(clauses.find((cl) => cl.id === v)?.text ?? v).replace(/^\w/, (ch) => ch.toUpperCase())}
                       </p>
                     ))
                   ) : (
@@ -394,7 +394,7 @@ function Snapshot({ order, cf }: { order: any; cf: Detail['counterfactual'] }) {
   const bought = order?.lines?.[0];
   const alt = cf?.compliant_alternatives?.[0];
   if (!bought) return null;
-  const size = (x: any) => `${x.attributes.unit_system ?? 'no size system'} ${x.attributes.gender ? `${x.attributes.gender}'s ` : ''}${x.attributes.size}`;
+  const size = (x: any) => `${x.attributes.gender ? `${x.attributes.gender}'s ` : ''}${x.attributes.unit_system ? `${x.attributes.unit_system} ${x.attributes.size}` : `${x.attributes.size} (no size system given)`}`;
   return (
     <div className="stack" style={{ gap: 6 }}>
       <h3 className="row" style={{ gap: 6 }}>
@@ -446,6 +446,8 @@ const ACTION_LABEL: Record<string, string> = {
   DISPUTE_ESCALATE: 'Escalate the dispute',
   DISPUTE_PROVIDE_EVIDENCE: 'File evidence with PayPal',
 };
+/** PayPal codes as words: UNDER_REVIEW is "under review". */
+const codeWords = (x: unknown) => String(x ?? '').toLowerCase().replace(/_/g, ' ');
 const KIND_LABEL: Record<string, string> = { RECOVERY: 'Recovery', DISPUTE_RESPONSE: 'PayPal dispute response', NO_CHARGE: 'No charge', REVERSAL: 'Reversal' };
 
 function SettlementPanel({ obligations, busy, act }: { obligations: any[]; busy: boolean; act: (path: string) => void }) {
@@ -528,9 +530,9 @@ function SettlementPanel({ obligations, busy, act }: { obligations: any[]; busy:
             </table>
             {o.paypal_dispute && (
               <p className="small">
-                PayPal dispute now: <strong>{o.paypal_dispute.status}</strong>
-                {o.paypal_dispute.stage ? ` (${o.paypal_dispute.stage})` : ''}
-                {o.paypal_dispute.outcome ? `, outcome ${o.paypal_dispute.outcome.outcome_code ?? JSON.stringify(o.paypal_dispute.outcome)}` : ', no outcome yet'}. Read live from PayPal.
+                PayPal dispute now: <strong>{codeWords(o.paypal_dispute.status)}</strong>
+                {o.paypal_dispute.stage ? ` (${codeWords(o.paypal_dispute.stage)} stage)` : ''}
+                {o.paypal_dispute.outcome ? `, outcome: ${codeWords(o.paypal_dispute.outcome.outcome_code ?? JSON.stringify(o.paypal_dispute.outcome))}` : ', no outcome yet'}. Read from PayPal.
               </p>
             )}
             <details>

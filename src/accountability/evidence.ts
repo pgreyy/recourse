@@ -14,7 +14,7 @@ export function mandateClauses(spec: MandateSpec): Array<{ id: string; text: str
   const out: Array<{ id: string; text: string }> = [{ id: 'category', text: `category: ${spec.category}` }];
   for (const a of spec.attributes) {
     if (a.name === 'size') {
-      out.push({ id: 'attribute.size', text: `size must be ${a.unit_system} ${a.value} (size value AND unit_system)` });
+      out.push({ id: 'attribute.size', text: `size must be ${a.unit_system} ${a.value} (size value and size system)` });
       if (a.gender) out.push({ id: 'attribute.size.gender', text: `size is ${a.gender}'s` });
     } else out.push({ id: `attribute.${a.name}`, text: `${a.name}: ${a.value}${a.unit_system ? ` ${a.unit_system}` : ''}` });
   }
@@ -22,7 +22,7 @@ export function mandateClauses(spec: MandateSpec): Array<{ id: string; text: str
   if (spec.merchants_allowed?.length) out.push({ id: 'merchant.allowlist', text: `merchant must be one of: ${spec.merchants_allowed.join(', ')}` });
   out.push({ id: 'budget.aggregate', text: `total spend across all orders at most ${spec.max_total.value} ${spec.max_total.currency}, tax and shipping included` });
   out.push({ id: 'quantity.max', text: `quantity ${spec.quantity}` });
-  out.push({ id: 'orders.max', text: `at most ${spec.max_orders} order(s)` });
+  out.push({ id: 'orders.max', text: `at most ${spec.max_orders} ${spec.max_orders === 1 ? 'order' : 'orders'}` });
   out.push({ id: 'substitution', text: spec.allow_substitutions ? 'substitutions allowed' : 'no substitutions (a different product than requested)' });
   out.push({ id: 'deadline', text: `delivered by ${spec.deadline}` });
   return out;
@@ -53,6 +53,8 @@ function timeline(m: CaseMaterial) {
           summary: `agent called ${p.tool}${p.input?.items ? ` with ${p.input.items.map((i: { variant_id: string }) => i.variant_id).join(', ')}` : ''}${p.result?.status ? ` -> ${p.result.status}` : ''}`,
           agent_reasoning: p.reasoning ? U('agent', String(p.reasoning)) : undefined,
         };
+      case e.kind === 'agent.tool_result':
+        return { ...base, summary: `${p.tool} returned${p.result?.status ? ` ${p.result.status}` : ''}${p.result?.error ? ` an error: ${p.result.error}` : ''}` };
       case e.kind.startsWith('merchant.cart.'):
         return {
           ...base,

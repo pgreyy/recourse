@@ -1,4 +1,4 @@
-import { api, ErrorNote, money, Policy, Status, useLoad, when } from '../lib';
+import { api, ErrorNote, money, Policy, Status, useLoad, when, plural } from '../lib';
 
 export function Reputation() {
   const r = useLoad((signal) => api<{ agents: any[]; operators: any[] }>('/console/agents', { signal }), []);
@@ -45,7 +45,7 @@ export function Reputation() {
                       {a.reliability === null || a.reliability === undefined ? '—' : a.reliability.toFixed(3)}
                     </td>
                     <td className="small muted">
-                      {a.basis.confirmed_agent_faults} confirmed fault(s), {a.basis.confirmed_fault_amount} of {a.basis.amount_bought} bought over {a.basis.orders} order(s)
+                      {plural(a.basis.confirmed_agent_faults, 'confirmed fault')}, {a.basis.confirmed_fault_amount} of {a.basis.amount_bought} bought over {plural(a.basis.orders, 'order')}
                     </td>
                     <td>
                       {a.coverage.covered ? <Policy p={a.merchant_policy.policy} /> : <Status tone="warn">Buyer approval</Status>}
@@ -85,7 +85,7 @@ export function Reputation() {
                       {o.basis.obligations_paid} paid ({o.basis.paid_amount}), {o.basis.obligations_failed} failed
                     </td>
                     <td>
-                      {o.outstanding_exposure.obligations} obligation(s), {o.outstanding_exposure.amount}
+                      {plural(o.outstanding_exposure.obligations, 'obligation')}, {o.outstanding_exposure.amount}
                     </td>
                     <td className="small">
                       {o.agreement ? (

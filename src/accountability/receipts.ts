@@ -97,9 +97,23 @@ export async function loadReceipt(receiptId: string) {
   );
   if (!rows[0]) return null;
   const r = rows[0];
-  const cases = await db().query('SELECT id, case_ref, status, description, created_at FROM cases WHERE receipt_id = $1 ORDER BY created_at', [receiptId]);
+  const [cases, refund, ruling] = await Promise.all([
+    db().query('SELECT id, case_ref, status, source, description, created_at FROM cases WHERE receipt_id = $1 ORDER BY created_at', [receiptId]),
+    // The buyer's refund, from any case on this order (a buyer report or a PayPal dispute).
+    db().query(
+      `SELECT a.amount_value::text AS value, a.currency, a.confirmation, a.confirmed_at, a.completed_at, a.paypal_ids->>'refund_id' AS refund_id
+         FROM settlement_actions a JOIN settlement_obligations so ON so.id = a.obligation_id JOIN cases c ON c.id = so.case_id
+        WHERE c.order_id = $1 AND a.action = 'REFUND_BUYER' AND a.status = 'SUCCEEDED' ORDER BY a.created_at DESC LIMIT 1`,
+      [r.order_id],
+    ),
+    db().query(
+      `SELECT ru.verdict, ru.status, ru.approved_at, c.status AS case_status, c.source FROM rulings ru JOIN cases c ON c.id = ru.case_id
+        WHERE c.order_id = $1 AND ru.status <> 'SUPERSEDED' ORDER BY ru.created_at DESC LIMIT 1`,
+      [r.order_id],
+    ),
+  ]);
   const diff = receiptDifferences(r.spec as MandateSpec, r.lines as Line[]);
-  return { ...r, ...diff, cases: cases.rows, firewall: r.firewall as FirewallResult };
+  return { ...r, ...diff, cases: cases.rows, refund: refund.rows[0] ?? null, ruling: ruling.rows[0] ?? null, firewall: r.firewall as FirewallResult };
 }
 
 /** "Confirm purchase": signed acknowledgement, stored and appended to the recorder. */

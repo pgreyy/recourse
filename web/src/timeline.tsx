@@ -1,5 +1,8 @@
 export type Entry = {
+  key?: string;
   seq: number;
+  /** A second row for the same recorded step (for example the merchant's suggested substitute). */
+  sub?: boolean;
   kind: string;
   recorded_at: string;
   title: string;
@@ -18,9 +21,9 @@ export function Timeline({ entries, highlight = [], fresh, dimAfter, idPrefix = 
       {entries.map((e) => {
         const cls = [e.tone, highlight.includes(e.seq) ? 'hl' : '', fresh?.has(e.seq) ? 'new' : '', dimAfter !== undefined && e.seq > dimAfter ? 'dim' : ''].join(' ');
         return (
-          <li key={e.seq} id={`${idPrefix}-${e.seq}`} className={cls} tabIndex={-1}>
-            <span className="seq" aria-label={`Step ${e.seq}`}>
-              {e.seq}
+          <li key={e.key ?? e.seq} id={e.sub ? undefined : `${idPrefix}-${e.seq}`} className={`${cls}${e.sub ? ' sub' : ''}`} tabIndex={e.sub ? undefined : -1}>
+            <span className="seq" aria-label={e.sub ? `Also step ${e.seq}` : `Step ${e.seq}`}>
+              {e.sub ? '' : e.seq}
             </span>
             <div>
               <div className="t-title">

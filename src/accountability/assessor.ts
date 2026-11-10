@@ -37,7 +37,8 @@ export const SYSTEM_PROMPT = [
   'Output rules:',
   '- violated_clauses: only ids from mandate.clauses, only for AGENT_FAULT, and only clauses whose code_status is VIOLATION or UNVERIFIABLE. A clause with code_status PASS was verified by code and was not violated.',
   '- cited_entries: only seq numbers that exist in timeline.',
-  '- reasoning: short and concrete; quote untrusted text only as evidence.',
+  '- reasoning: short and concrete, in plain English for a person who has never seen this evidence format; quote untrusted text only as evidence.',
+  '- In reasoning and evidence_gaps, refer to timeline entries as "step N" (never "seq" or "entry"), and never write field, rule or clause names such as code_facts, unit_system, compliant_alternatives or attribute.size. Say what they mean instead: "the code checks", "size system", "a compliant alternative", "the size clause".',
 ].join('\n');
 
 export const PROMPT_VERSION_HASH = canonicalHash({

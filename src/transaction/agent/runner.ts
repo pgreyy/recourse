@@ -50,18 +50,19 @@ function compactCheckout(r: CheckoutResult) {
   return { status: r.status, error: r.error };
 }
 
-/** The four tools. Each call and its result (with the one-line reasoning) is written to the recorder. */
+/** The four tools. Each call (with its one-line reasoning) is written to the recorder before it runs, and its
+ *  result after, so the trail reads in the order things happened: the call, what it caused, then the answer. */
 function buildTools(state: RunState) {
-  const record = async (tool: string, why: string, input: unknown, result: unknown, snapshotSha?: string) => {
-    state.toolCalls++;
-    await appendEntry(state.caseRef, 'agent.tool_call', { n: state.toolCalls, tool, reasoning: why, input, result, catalog_snapshot_sha256: snapshotSha ?? null });
-  };
-  const guard = async <T>(name: string, why: string, input: unknown, fn: () => Promise<T>): Promise<T | { error: string }> => {
+  type Done = (result: unknown, snapshotSha?: string) => Promise<unknown>;
+  const guard = async <T>(name: string, why: string, input: unknown, fn: (done: Done) => Promise<T>): Promise<T | { error: string }> => {
+    const n = ++state.toolCalls;
+    await appendEntry(state.caseRef, 'agent.tool_call', { n, tool: name, reasoning: why, input });
+    const done: Done = (result, snapshotSha) => appendEntry(state.caseRef, 'agent.tool_result', { n, tool: name, result, catalog_snapshot_sha256: snapshotSha ?? null });
     try {
-      return await fn();
+      return await fn(done);
     } catch (e) {
       const msg = e instanceof HttpError ? `${e.errorName}: ${e.message}` : (e as Error).message;
-      await record(name, why, input, { error: msg });
+      await done({ error: msg });
       return { error: msg };
     }
   };
@@ -74,10 +75,10 @@ function buildTools(state: RunState) {
         max_price: z.string().optional().describe('Highest unit price, e.g. "120.00"'),
       }),
       execute: async ({ reasoning: why, ...input }) =>
-        guard('search_catalog', why, input, async () => {
+        guard('search_catalog', why, input, async (done) => {
           if (state.searched) {
             const again = { ...(state.searched as object), note: 'Same results as your earlier search. Use them: pick a listing and create a cart.' };
-            await record('search_catalog', why, input, { repeated: true });
+            await done({ repeated: true });
             return again;
           }
           const snap = await takeSnapshot(DEMO_MERCHANT.id);
@@ -96,7 +97,7 @@ function buildTools(state: RunState) {
             .filter((l) => l.variants.length);
           // Like a merchant catalog feed: listings and prices, no live stock (the cart confirms availability).
           const result = { catalog_snapshot_sha256: snap.sha256, catalog_version: snap.catalog_version, delivery_days: snap.snapshot.merchant.delivery_days, listings };
-          await record('search_catalog', why, input, { listings: listings.map((l) => ({ listing_id: l.listing_id, variants: l.variants.length })) }, snap.sha256);
+          await done({ listings: listings.map((l) => ({ listing_id: l.listing_id, variants: l.variants.length })) }, snap.sha256);
           state.searched = result;
           return result;
         }),
@@ -105,9 +106,9 @@ function buildTools(state: RunState) {
       description: 'Create a cart at Stride & Co. Out-of-stock items come back as validation_issues, possibly with a suggested_substitute.',
       inputSchema: z.object({ reasoning, items: z.array(z.object({ variant_id: z.string(), quantity: z.number().int().min(1) })).min(1) }),
       execute: async ({ reasoning: why, items }) =>
-        guard('create_cart', why, { items }, async () => {
+        guard('create_cart', why, { items }, async (done) => {
           const c = compactCart(await createCart({ items }, state.caseRef));
-          await record('create_cart', why, { items }, c, c.catalog_snapshot_sha256);
+          await done(c, c.catalog_snapshot_sha256);
           return c;
         }),
     }),
@@ -115,9 +116,9 @@ function buildTools(state: RunState) {
       description: 'Replace the items in an existing cart.',
       inputSchema: z.object({ reasoning, cart_id: z.string(), items: z.array(z.object({ variant_id: z.string(), quantity: z.number().int().min(1) })).min(1) }),
       execute: async ({ reasoning: why, cart_id, items }) =>
-        guard('update_cart', why, { cart_id, items }, async () => {
+        guard('update_cart', why, { cart_id, items }, async (done) => {
           const c = compactCart(await updateCart(cart_id, { items }));
-          await record('update_cart', why, { cart_id, items }, c, c.catalog_snapshot_sha256);
+          await done(c, c.catalog_snapshot_sha256);
           return c;
         }),
     }),
@@ -125,18 +126,18 @@ function buildTools(state: RunState) {
       description: "Pay for a READY cart with the buyer's saved PayPal. A deterministic firewall checks the cart against the mandate first.",
       inputSchema: z.object({ reasoning, cart_id: z.string() }),
       execute: async ({ reasoning: why, cart_id }) =>
-        guard('checkout', why, { cart_id }, async () => {
+        guard('checkout', why, { cart_id }, async (done) => {
           if (state.dryRun) {
             const p = await previewCheckout({ cartId: cart_id, mandateId: state.mandateId, requestId: `${state.caseRef}:${cart_id}:dry-run`, agentVersionId: state.agentVersionId });
             state.preview = p;
             const c = { status: 'DRY_RUN', would: p.would, firewall_decision: p.firewall.decision, note: 'Dry run: nothing was charged. Stop now.' };
-            await record('checkout', why, { cart_id }, c);
+            await done(c);
             return c;
           }
           const r = await checkout({ cartId: cart_id, mandateId: state.mandateId, requestId: `${state.caseRef}:${cart_id}`, agentVersionId: state.agentVersionId });
           state.result = r;
           const c = compactCheckout(r);
-          await record('checkout', why, { cart_id }, c);
+          await done(c);
           return c;
         }),
     }),

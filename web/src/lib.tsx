@@ -84,9 +84,17 @@ export const money = (m?: Money | null) => (m ? `${Number(m.value).toLocaleStrin
 export const moneyList = (ms?: Money[] | null) => (ms && ms.length ? ms.map(money).join(' + ') : '0.00');
 export const when = (d?: string | null) =>
   d ? new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC' : '—';
+/** "10 Nov 15:25" (UTC): for tight spaces such as grid cells. */
+export const shortWhen = (d?: string | null) => {
+  if (!d) return '';
+  const t = new Date(d);
+  return `${t.getUTCDate()} ${t.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })} ${t.toISOString().slice(11, 16)}`;
+};
 export const short = (h?: string | null, n = 12) => (h ? (h.length > n + 3 ? `${h.slice(0, n)}…` : h) : '—');
 /** Show enough of an email to recognise it, not the whole address. */
 export const maskEmail = (e?: string | null) => (e ? e.replace(/^([^@]{0,3})[^@]*@/, '$1…@') : '—');
+/** "1 case", "2 cases". */
+export const plural = (n: number | null | undefined, one: string, many = `${one}s`) => `${n ?? 0} ${(n ?? 0) === 1 ? one : many}`;
 export const pct = (x?: number | null) => (x === null || x === undefined ? '—' : `${(x * 100).toFixed(1)}%`);
 
 // ---------- small components ----------

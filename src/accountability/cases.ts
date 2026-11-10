@@ -1,4 +1,5 @@
 import { agentCoverage } from '../authorization/coverage';
+import { plainList, plainText } from '../console/plain';
 import { appendEntry } from '../evidence/recorder';
 import { loadSigner, signDocument } from '../shared/crypto/signing';
 import { db, tx } from '../shared/db/pool';
@@ -131,8 +132,10 @@ export function publicResult(r: PipelineResult) {
     model_verdict: r.ai_output?.verdict ?? null,
     violated_clauses: r.ai_output?.violated_clauses ?? [],
     cited_entries: r.ai_output?.cited_entries ?? [],
-    reasoning: r.ai_output?.reasoning ?? null,
-    evidence_gaps: r.ai_output?.evidence_gaps ?? [],
+    // Shown in plain English; the stored model output is unchanged (reasoning_raw).
+    reasoning: plainText(r.ai_output?.reasoning),
+    reasoning_raw: r.ai_output?.reasoning ?? null,
+    evidence_gaps: plainList(r.ai_output?.evidence_gaps),
     validation: r.validation,
     code_checks: r.code_checks,
     decision_facts: r.decision_facts,
@@ -270,8 +273,10 @@ export async function caseView(cs: CaseRow) {
           human_review_reasons: a.human_review_reasons,
           violated_clauses: a.ai_output?.violated_clauses ?? [],
           cited_entries: a.ai_output?.cited_entries ?? [],
-          reasoning: a.ai_output?.reasoning ?? null,
-          counterfactual: a.counterfactual,
+          reasoning: plainText(a.ai_output?.reasoning),
+          reasoning_raw: a.ai_output?.reasoning ?? null,
+          evidence_gaps: plainList(a.ai_output?.evidence_gaps),
+          counterfactual: a.counterfactual ? { ...a.counterfactual, note: plainText(a.counterfactual.note) } : a.counterfactual,
           injection_flags: dedupeFlags(a.injection_flags),
           validation: a.validation,
           model: a.model_provider ? `${a.model_provider}/${a.model_id}` : null,

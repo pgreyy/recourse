@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, ErrorNote, Id, money, navigate, Status, short, useLoad, useLocation, when, type Tone, maskEmail } from '../lib';
+import { api, ErrorNote, Id, money, navigate, Status, short, useLoad, useLocation, when, type Tone, maskEmail, plural } from '../lib';
 
 const EXAMPLE = "Running shoes, US men's 10, under $120, Kestrel or Sorin, by Friday";
 
@@ -141,7 +141,7 @@ export function Buyer() {
                     <dd>{when(d.signed_at)}</dd>
                     <dt>Budget left</dt>
                     <dd>
-                      {money(d.remaining_budget?.remaining)} of {money(d.remaining_budget?.max_total)}, {d.remaining_budget?.orders_remaining} order(s) left
+                      {money(d.remaining_budget?.remaining)} of {money(d.remaining_budget?.max_total)}, {plural(d.remaining_budget?.orders_remaining, 'order')} left
                     </dd>
                   </dl>
                 )}

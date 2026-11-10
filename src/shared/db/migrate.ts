@@ -44,7 +44,7 @@ async function main(): Promise<void> {
       console.log(`applied ${file}`);
       ran++;
     }
-    console.log(ran ? `${ran} migration(s) applied.` : 'Database is up to date.');
+    console.log(ran ? `${ran} ${ran === 1 ? 'migration' : 'migrations'} applied.` : 'Database is up to date.');
   } finally {
     await client.query('SELECT pg_advisory_unlock($1)', [LOCK_ID]).catch(() => {});
     client.release();

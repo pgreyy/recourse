@@ -1,10 +1,13 @@
 import { agentVersionReputation, operatorReputation } from '../accountability/reputation';
+import { timelineView } from './timeline';
 import { receiptToken } from '../accountability/receipts';
 import { agentCoverage } from '../authorization/coverage';
 import { checkMandateSignature } from '../authorization/mandate-document';
 import { listCheckpoints, listEntries, verifyChain, type RecorderEntry } from '../evidence/recorder';
 import { getOrder } from '../paypal/orders';
 import { usedUnderAgreement } from '../settlement/exposure';
+
+const PENDING_STATUSES = ['OPEN', 'BUYER_REFUNDED', 'AWAITING_CONFIRMATION', 'INVOICED', 'AWAITING_PAYPAL'];
 import { db } from '../shared/db/pool';
 
 /**
@@ -20,7 +23,7 @@ const byCurrency = (rows: Array<{ currency: string; v: string | null }>): Money[
   rows.filter((r) => r.v !== null).map((r) => ({ value: Number(r.v).toFixed(2), currency: r.currency.trim() }));
 
 export async function overview() {
-  const q = async (sql: string) => (await db().query(sql)).rows;
+  const q = async (sql: string, params: unknown[] = []) => (await db().query(sql, params)).rows;
   const purchases = await q(
     `SELECT currency, COUNT(*)::int AS n, SUM(total_value)::text AS v FROM orders
      WHERE agent_version_id IS NOT NULL AND captured_at IS NOT NULL GROUP BY currency`,
@@ -29,7 +32,8 @@ export async function overview() {
   const recovered = await q(`SELECT currency, COUNT(*)::int AS n, SUM(recovered_value)::text AS v FROM settlement_obligations WHERE status = 'RECOVERED' GROUP BY currency`);
   const pending = await q(
     `SELECT currency, COUNT(*)::int AS n, SUM(amount_value)::text AS v FROM settlement_obligations
-     WHERE status IN ('OPEN', 'BUYER_REFUNDED', 'AWAITING_CONFIRMATION', 'INVOICED', 'AWAITING_PAYPAL') GROUP BY currency`,
+     WHERE status = ANY($1) GROUP BY currency`,
+    [PENDING_STATUSES],
   );
   const agreements = (
     await db().query<{ id: string; operator: string; version: number; aggregate_cap: string; currency: string }>(
@@ -81,7 +85,7 @@ export async function caseRows() {
             a.name AS agent_name, v.version AS agent_version, v.id AS agent_version_id, op.name AS operator_name,
             r.id AS ruling_id, r.status AS ruling_status, r.verdict AS ruling_verdict, r.operator_accepted_at,
             asm.final_verdict AS assessed_verdict, asm.validation->>'passed' AS validation_passed,
-            s.id AS obligation_id, s.kind AS obligation_kind, s.status AS settlement_status, s.recovered_value::text AS recovered, s.currency AS settlement_currency
+            s.id AS obligation_id, s.kind AS obligation_kind, s.status AS settlement_status, s.recovered_value::text AS recovered, s.amount_value::text AS obligation_amount, s.currency AS settlement_currency
      FROM cases c
      LEFT JOIN orders o ON o.id = c.order_id
      LEFT JOIN agent_versions v ON v.id = o.agent_version_id
@@ -118,6 +122,8 @@ export async function caseRows() {
       obligation_id: r.obligation_id,
       settlement_status: r.settlement_status,
       recovered: r.recovered && Number(r.recovered) > 0 && r.settlement_status === 'RECOVERED' ? { value: r.recovered, currency: r.settlement_currency.trim() } : null,
+      // Owed but not yet confirmed by PayPal (the same statuses as the overview's Pending tile).
+      pending: PENDING_STATUSES.includes(r.settlement_status) ? { value: r.obligation_amount, currency: r.settlement_currency.trim() } : null,
     });
   }
   return out;
@@ -208,123 +214,9 @@ export async function caseContext(caseId: string) {
           receipt_path: receipt,
         }
       : null,
-    timeline: entries.map(entryView),
+    timeline: timelineView(entries),
     chain: chain ? { valid: chain.valid, entries: chain.entries, checkpoints: chain.checkpoints } : null,
   };
-}
-
-/** A recorder entry as the screens show it: what happened, in a line, plus the raw payload. */
-export function entryView(e: RecorderEntry) {
-  const p = e.payload as any;
-  let title = e.kind;
-  let detail = '';
-  let tone: 'normal' | 'warn' | 'block' | 'money' | 'ok' = 'normal';
-  switch (e.kind) {
-    case 'agent.run.started':
-      title = `${p.agent?.name} v${p.agent?.version} started`;
-      detail = `mandate v${p.mandate?.version}, budget left ${p.budget_remaining}${p.dry_run ? ', dry run' : ''}`;
-      break;
-    case 'agent.tool_call':
-      title = `Agent called ${p.tool}`;
-      detail = p.tool === 'search_catalog' ? `searched ${Object.entries(p.input ?? {}).map(([k, v]) => `${k} ${Array.isArray(v) ? v.join(', ') : v}`).join('; ') || 'everything'}` : p.tool === 'checkout' ? `checkout ${p.input?.cart_id ?? ''}` : (p.input?.items ?? []).map((i: any) => `${i.quantity} x ${i.variant_id}`).join(', ');
-      break;
-    case 'merchant.cart.created':
-    case 'merchant.cart.updated':
-    case 'merchant.cart.viewed':
-      title = `Cart ${e.kind.split('.').pop()}`;
-      detail = `${(p.lines ?? []).map((l: any) => `${l.variant_id} ${l.price}`).join(', ')}; ${p.status}`;
-      break;
-    case 'checkout.firewall': {
-      const checks = (p.checks ?? []) as Array<{ rule: string; status: string; detail: string }>;
-      const warns = checks.filter((c) => c.status === 'WARN' || c.status === 'UNVERIFIABLE');
-      const blocks = checks.filter((c) => c.status === 'BLOCK' || c.status === 'FAIL');
-      title = blocks.length ? 'Firewall blocked checkout' : warns.length ? 'Firewall warning' : 'Firewall passed';
-      detail = (blocks.length ? blocks : warns.length ? warns : []).map((c) => `${c.rule}: ${c.detail}`).join('; ') || `${checks.length} checks passed`;
-      tone = blocks.length ? 'block' : warns.length ? 'warn' : 'ok';
-      break;
-    }
-    case 'checkout.started':
-      title = p.proceeded_despite_warnings ? 'Checkout proceeded despite the warning' : 'Checkout started';
-      detail = p.proceeded_despite_warnings ? `warning at step ${p.proceeded_despite_warnings.warning_entry_seq} was not resolved` : `${(p.lines ?? []).map((l: any) => l.variant_id).join(', ')}`;
-      tone = p.proceeded_despite_warnings ? 'warn' : 'normal';
-      break;
-    case 'checkout.step_up_required':
-      title = 'Buyer approval required';
-      tone = 'block';
-      break;
-    case 'paypal.order.created':
-      title = 'PayPal order created';
-      detail = `order ${p.paypal_order_id}, ${p.status}`;
-      tone = 'money';
-      break;
-    case 'paypal.anchor.verified':
-      title = p.all_match ? 'Anchor matched in PayPal order' : 'Anchor mismatch';
-      detail = 'custom_id, invoice_id and description re-read from PayPal';
-      tone = p.all_match ? 'ok' : 'block';
-      break;
-    case 'paypal.tracker.added':
-      title = 'Tracking added';
-      detail = p.tracking_number ?? '';
-      break;
-    case 'checkout.completed':
-      title = 'Purchase captured';
-      detail = `${p.amount?.value} ${p.amount?.currency_code}, ${p.order_ref}`;
-      tone = 'money';
-      break;
-    case 'agent.run.finished':
-      title = `Run finished: ${p.outcome}`;
-      detail = `${p.tool_calls} tool calls, ${p.model}`;
-      break;
-    case 'agent.run.failed':
-      title = 'Run failed';
-      detail = p.error ?? '';
-      tone = 'block';
-      break;
-    case 'buyer.issue.reported':
-      title = 'Buyer reported an issue';
-      detail = p.description ?? '';
-      break;
-    case 'operator.statement':
-      title = 'Operator statement';
-      detail = p.flagged_instruction_like ? 'contains instruction-like text (flagged by code)' : '';
-      break;
-    case 'paypal.dispute.case_opened':
-      title = 'PayPal dispute opened a case';
-      detail = `${p.dispute_id}: ${p.reason ?? ''}`;
-      break;
-    case 'case.assessed':
-      title = `Assessed: ${p.verdict}`;
-      break;
-    case 'ruling.approved':
-      title = `Ruling approved: ${p.verdict}`;
-      detail = `by ${p.approved_by?.name ?? ''}`;
-      break;
-    case 'ruling.operator_accepted':
-      title = 'Operator accepted the ruling';
-      detail = 'appeal waived';
-      break;
-    case 'settlement.obligation_created':
-      title = 'Settlement obligation created';
-      detail = `${p.kind} ${p.amount?.value} ${p.amount?.currency}`;
-      break;
-    case 'settlement.action_intended':
-      title = `Intent stored: ${p.action}`;
-      detail = p.amount ? `${p.amount.value} ${p.amount.currency}` : '';
-      break;
-    case 'settlement.action_result':
-      title = `${p.action}: ${p.status}`;
-      detail = Object.entries(p.paypal_ids ?? {}).map(([k, v]) => `${k} ${v}`).join(', ');
-      tone = 'money';
-      break;
-    case 'settlement.recovered':
-      title = 'Recovered (confirmed by PayPal)';
-      detail = `${p.recovered}, confirmed by ${p.confirmed_by}`;
-      tone = 'ok';
-      break;
-    default:
-      if (e.kind.startsWith('paypal.')) tone = 'money';
-  }
-  return { seq: e.seq, kind: e.kind, recorded_at: e.created_at, title, detail, tone, payload: e.payload, hash: e.hash };
 }
 
 /** Every agent version with coverage, reputation and merchant policy; every operator with accountability. */
@@ -384,7 +276,7 @@ export async function runView(runId: string) {
       finished_at: run.finished_at,
       error: run.error,
     },
-    timeline: runEntries.map(entryView),
+    timeline: timelineView(runEntries),
     order: order
       ? {
           order_ref: order.order_ref,

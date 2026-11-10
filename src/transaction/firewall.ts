@@ -1,4 +1,5 @@
 import type { MandateSpec } from '../authorization/mandate-spec';
+import { plural } from '../shared/words';
 import { sameMensSize, type UnitSystem } from './sizes';
 
 /**
@@ -116,7 +117,7 @@ export function runFirewall(input: FirewallInput): FirewallResult {
   );
 
   // orders and quantity
-  add('orders.max', history.orders_placed + 1 <= spec.max_orders, `order ${history.orders_placed + 1} of at most ${spec.max_orders}`, `${history.orders_placed} order(s) already placed; max_orders is ${spec.max_orders}`);
+  add('orders.max', history.orders_placed + 1 <= spec.max_orders, `order ${history.orders_placed + 1} of at most ${spec.max_orders}`, `${plural(history.orders_placed, 'order')} already placed; the mandate allows ${spec.max_orders}`);
   add(
     'orders.split',
     spec.allow_split_orders || history.orders_placed === 0,
@@ -125,9 +126,9 @@ export function runFirewall(input: FirewallInput): FirewallResult {
   );
   const units = cart.lines.reduce((n, l) => n + l.quantity, 0);
   const remaining = spec.quantity - history.units_bought;
-  add('quantity.max', units <= remaining, `${units} unit(s), ${remaining} remaining under the mandate`, `${units} unit(s) in the cart, only ${remaining} remaining under the mandate`);
+  add('quantity.max', units <= remaining, `${plural(units, 'unit')}, ${remaining} remaining under the mandate`, `${plural(units, 'unit')} in the cart, only ${remaining} remaining under the mandate`);
   if (units < remaining && !spec.allow_split_orders) {
-    checks.push({ rule: 'quantity.partial', status: 'WARNING', detail: `${units} of ${remaining} unit(s); split orders are not allowed, so the rest can't be bought later` });
+    checks.push({ rule: 'quantity.partial', status: 'WARNING', detail: `${units} of ${plural(remaining, 'unit')}; split orders are not allowed, so the rest can't be bought later` });
   }
 
   // merchant

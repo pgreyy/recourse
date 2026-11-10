@@ -135,6 +135,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .timeline li.money .seq { color: var(--accent-ink); background: var(--accent-soft); border-color: #a9cbc6; }
 .timeline li.hl { background: linear-gradient(90deg, #fbf0d6 0, #fff8e8 70%, transparent); border-radius: 4px; margin: 0 -8px; padding-left: 8px; padding-right: 8px; }
 .timeline li.dim { opacity: .62; }
+/* A second row of the same step: a small dot on the line instead of a step number. */
+.timeline li.sub { padding-top: 0; }
+.timeline li.sub .seq { width: 10px; height: 10px; margin: 6px 12px 0; border-radius: 50%; }
 .timeline li.new { animation: arrive .35s ease-out; }
 @keyframes arrive { from { opacity: 0; transform: translateY(-4px); } }
 @media (prefers-reduced-motion: reduce) { .timeline li.new { animation: none; } }

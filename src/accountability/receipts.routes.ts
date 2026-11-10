@@ -13,6 +13,37 @@ const STATUS = {
   VIOLATION_APPROVED: { label: 'Violation (you approved it)', cls: 'bad', text: 'This purchase broke a mandate rule and went ahead only after you approved it at PayPal.' },
 } as const;
 
+const day = (d: string | Date) => {
+  const t = new Date(d);
+  return `${t.getUTCDate()} ${t.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`;
+};
+const VERDICT_WORDS: Record<string, string> = { AGENT_FAULT: 'agent fault', MERCHANT_FAULT: 'merchant fault', BUYER_REMORSE: "buyer's remorse", THIRD_PARTY_FAULT: 'third-party fault' };
+
+/** The outcome line at the bottom of the receipt, from the confirmed settlement (or the ruling, when nothing is refunded). */
+function outcome(r: NonNullable<ReceiptView>): string {
+  const f = r.refund as { value: string; currency: string; confirmation: string; confirmed_at: string | null; completed_at: string | null; refund_id: string | null } | null;
+  const ru = r.ruling as { verdict: string; status: string; approved_at: string; case_status: string; source: string } | null;
+  if (f && f.confirmation === 'confirmed') {
+    return `<div class="card outcome ok" role="status"><h2>Outcome</h2><p><strong>Resolved: refunded ${esc(f.value)} ${esc(f.currency.trim())} on ${esc(day(f.confirmed_at ?? f.completed_at!))}.</strong></p><p class="muted">Confirmed by PayPal${f.refund_id ? `, refund ${esc(f.refund_id)}` : ''}.${ru?.verdict === 'AGENT_FAULT' ? " The agent's operator covers the cost." : ''} You do not need to file a dispute.</p></div>`;
+  }
+  if (f) {
+    return `<div class="card outcome" role="status"><h2>Outcome</h2><p><strong>Refund of ${esc(f.value)} ${esc(f.currency.trim())} issued on ${esc(day(f.completed_at!))}.</strong></p><p class="muted">Waiting for PayPal to confirm it.</p></div>`;
+  }
+  if (!ru) return '';
+  const v = VERDICT_WORDS[ru.verdict] ?? ru.verdict.toLowerCase().replace(/_/g, ' ');
+  if (ru.case_status === 'CLOSED') {
+    return `<div class="card outcome" role="status"><h2>Outcome</h2><p><strong>Resolved on ${esc(day(ru.approved_at))}: no refund.</strong></p><p class="muted">The ruling found ${esc(v)}.</p></div>`;
+  }
+  const where = ru.source === 'PAYPAL_DISPUTE' ? ' Your PayPal dispute is still under review at PayPal, which makes the final decision.' : '';
+  return `<div class="card outcome" role="status"><h2>Outcome</h2><p><strong>Ruling on ${esc(day(ru.approved_at))}: ${esc(v)}.</strong></p><p class="muted">Not resolved yet.${where}</p></div>`;
+}
+
+const CASE_STATUS: Record<string, string> = { OPEN: 'open', ASSESSED: 'being reviewed', RULING_APPROVED: 'decided', APPEALED: 'under appeal', CLOSED: 'closed' };
+function caseLine(c: { case_ref: string; status: string; source?: string }): string {
+  const how = c.source === 'PAYPAL_DISPUTE' ? 'You opened a PayPal dispute' : 'You reported an issue';
+  return `<p class="warn">${how}. Case ${esc(c.case_ref)} is ${esc(CASE_STATUS[c.status] ?? c.status.toLowerCase().replace(/_/g, ' '))}.</p>`;
+}
+
 function page(r: NonNullable<ReceiptView>, token: string, notice?: string): string {
   const st = STATUS[r.compliance as keyof typeof STATUS];
   const spec = r.spec as { category: string; max_total: { value: string; currency: string }; deadline: string };
@@ -47,6 +78,10 @@ textarea{width:100%;font:inherit;padding:8px 10px;border-radius:6px;border:1px s
 textarea:focus-visible{outline:2px solid var(--accent);outline-offset:0}
 label{display:block;font-size:13px;font-weight:500;color:var(--ink2);margin:12px 0 6px}
 .notice{border-left:3px solid var(--accent)}
+.card>p:first-child,.card>form:first-child{margin-top:0}.card>p:last-child{margin-bottom:0}
+.outcome{border-left:3px solid var(--line2)}.outcome.ok{border-left-color:var(--ok)}.outcome p{margin:0 0 4px}
+@media (max-width:440px){main{padding:16px 12px 32px}.card{padding:14px}h1{font-size:22px;margin-bottom:12px}
+dl{grid-template-columns:1fr;gap:0}dt{margin-top:8px}dt:first-child{margin-top:0}.quote{font-size:16px}header .sb{font-size:11px}}
 </style></head><body>
 <header><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#0b4f4a"/><path d="M10 23V9h7a4.5 4.5 0 0 1 0 9h-7m7 0 5 5" stroke="#fff" stroke-width="2.6" fill="none"/></svg>Recourse<span class="sb">PayPal sandbox</span></header>
 <main>
@@ -72,11 +107,12 @@ ${
 }
 ${
   reported
-    ? `<p class="warn">You reported an issue. Case ${esc(r.cases[r.cases.length - 1].case_ref)} is ${esc(String(r.cases[r.cases.length - 1].status).toLowerCase().replace(/_/g, ' '))}.</p>`
+    ? caseLine(r.cases[r.cases.length - 1])
     : `<form method="post" action="/r/${esc(token)}/report"><label for="desc">What is wrong? (optional)</label><textarea id="desc" name="description"></textarea><button class="secondary" type="submit">Report an issue</button></form>`
 }
 <p class="muted">Confirming is not a waiver of your PayPal dispute rights.</p>
 </div>
+${outcome(r)}
 </main></body></html>`;
 }
 
