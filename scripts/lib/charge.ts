@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto';
-import { CheckoutPaymentIntent, type PaymentSource } from '@paypal/paypal-server-sdk';
+import { captureOrder, createVaultOrder, getOrder } from '../../src/paypal/orders';
 import { currency, saveValues } from './env';
-import { requestId } from './http';
-import { orders, sdkCall } from './sdk';
+import { printed } from './sdk';
 
 export type ChargeInput = {
   vaultId: string;
@@ -31,26 +30,16 @@ export async function chargeVault(input: ChargeInput): Promise<void> {
   console.log(`custom_id (sha256, ${customId.length} chars): ${customId}`);
   console.log(`invoice_id: ${invoiceRef}`);
 
-  const paymentSource: PaymentSource =
-    input.source === 'card' ? { card: { vaultId: input.vaultId } } : { paypal: { vaultId: input.vaultId } };
-
-  const created = await sdkCall('POST /v2/checkout/orders (vault_id, payer not present)', () =>
-    orders.createOrder({
-      paypalRequestId: requestId(),
-      prefer: 'return=representation',
-      body: {
-        intent: CheckoutPaymentIntent.Capture,
-        purchaseUnits: [
-          {
-            referenceId: 'default',
-            description: input.description,
-            customId,
-            invoiceId: invoiceRef,
-            amount: { currencyCode: currency(), value: input.amount },
-          },
-        ],
-        paymentSource,
-      },
+  const created = await printed(
+    'POST /v2/checkout/orders (vault_id, payer not present)',
+    createVaultOrder({
+      vaultId: input.vaultId,
+      source: input.source,
+      amount: input.amount,
+      currency: currency(),
+      customId,
+      invoiceId: invoiceRef,
+      description: input.description,
     }),
   );
   if (created.status >= 300) process.exit(1);
@@ -61,14 +50,12 @@ export async function chargeVault(input: ChargeInput): Promise<void> {
     console.log('\nOrder came back COMPLETED on create: no separate capture call needed.');
   } else {
     console.log(`\nOrder status after create: ${order.status}. Capturing.`);
-    const captured = await sdkCall(`POST /v2/checkout/orders/${orderId}/capture`, () =>
-      orders.captureOrder({ id: orderId, paypalRequestId: requestId(), prefer: 'return=representation' }),
-    );
+    const captured = await printed(`POST /v2/checkout/orders/${orderId}/capture`, captureOrder(orderId));
     if (captured.status >= 300) process.exit(1);
     order = captured.body;
   }
 
-  const fetched = await sdkCall(`GET /v2/checkout/orders/${orderId}`, () => orders.getOrder({ id: orderId }));
+  const fetched = await printed(`GET /v2/checkout/orders/${orderId}`, getOrder(orderId));
   const unit = fetched.body.purchase_units?.[0];
   const capture = unit?.payments?.captures?.[0] ?? order.purchase_units?.[0]?.payments?.captures?.[0];
 

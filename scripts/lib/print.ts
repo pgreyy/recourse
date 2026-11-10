@@ -1,13 +1,9 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
+import { parseBody as coreParseBody, type PPResponse } from '../../src/paypal/types';
 import { LOCAL_DIR } from './env';
 
-export type PPResponse = {
-  status: number;
-  debugId?: string;
-  headers: Record<string, string>;
-  body: any;
-};
+export type { PPResponse };
 
 const SECRET_KEYS = new Set(['access_token', 'refresh_token', 'id_token', 'nonce']);
 
@@ -28,14 +24,7 @@ function mask(v: string): string {
   return `${v.slice(0, 6)}...(${v.length} chars, masked)`;
 }
 
-export function parseBody(text: string): any {
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
+export const parseBody = coreParseBody;
 
 /** Print the full response and append it (token fields masked) to .local/logs/probes.jsonl. */
 export function show(label: string, res: PPResponse): PPResponse {

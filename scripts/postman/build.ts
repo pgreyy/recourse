@@ -1,4 +1,5 @@
-// Writes postman/recourse.postman_collection.json (Postman v2.1) with every call the probes make.
+// Writes postman/recourse.postman_collection.json (Postman v2.1): one folder per phase.
+// Phase 0 holds every PayPal sandbox call the probes make; Phases 1 and 2 call the Recourse API.
 // Run: npm run postman
 import { mkdirSync, writeFileSync } from 'node:fs';
 
@@ -13,6 +14,8 @@ type Req = {
   test?: string[];
   prerequest?: string[];
   description?: string;
+  /** Calls the Recourse API ({{app_base_url}}, no auth) instead of PayPal. */
+  app?: boolean;
 };
 
 const json = (o: unknown) => JSON.stringify(o, null, 2);
@@ -421,11 +424,218 @@ const folders: Array<{ name: string; description: string; items: Req[] }> = [
   },
 ];
 
+
+// ---------- Phase 1 and 2: the Recourse API ----------
+
+const expectStatus = (code: number) => `pm.test('HTTP ${code}', () => pm.response.to.have.status(${code}));`;
+
+const phase1: Array<{ name: string; description: string; items: Req[] }> = [
+  {
+    name: '1.0 Service',
+    description: 'Start the API with npm run dev. app_base_url defaults to http://localhost:3000.',
+    items: [
+      { app: true, name: 'Health', method: 'GET', path: '/health', test: [expectStatus(200)] },
+      {
+        app: true,
+        name: 'Signing public key',
+        method: 'GET',
+        path: '/.well-known/recourse-signing-key',
+        test: [expectStatus(200), "pm.test('Ed25519 key id', () => pm.expect(pm.response.json().key_id).to.match(/^ed25519:/));"],
+      },
+    ],
+  },
+  {
+    name: '1.1 Mandates',
+    description: 'Create from plain English (LLM), approve with PayPal Vault, then check the signature.',
+    items: [
+      {
+        app: true,
+        name: 'Create mandate',
+        method: 'POST',
+        path: '/mandates',
+        body: { buyer_email: '{{buyer_email}}', text: "Running shoes, US men's 10, under $120, Nike or Asics, delivered by Friday" },
+        test: [
+          expectStatus(201),
+          "const m = pm.response.json(); pm.collectionVariables.set('mandate_id', m.id);",
+          "pm.test('DRAFT', () => pm.expect(m.status).to.eql('DRAFT'));",
+          "pm.test('size keeps its system', () => pm.expect(m.spec.attributes.find(a => a.name === 'size').unit_system).to.eql('US'));",
+          "pm.test('max_total 120.00 USD', () => pm.expect(m.spec.max_total).to.eql({ value: '120.00', currency: 'USD' }));",
+        ],
+      },
+      {
+        app: true,
+        name: 'Create mandate: size without a system (expect 422)',
+        method: 'POST',
+        path: '/mandates',
+        body: { buyer_email: '{{buyer_email}}', text: 'Running shoes, size 10, under $120, by Friday' },
+        test: [expectStatus(422), "pm.test('MANDATE_UNCLEAR', () => pm.expect(pm.response.json().name).to.eql('MANDATE_UNCLEAR'));"],
+      },
+      {
+        app: true,
+        name: 'Get mandate (signature_valid)',
+        method: 'GET',
+        path: '/mandates/{{mandate_id}}',
+        test: [expectStatus(200), "const m = pm.response.json(); console.log(m.status, 'signature_valid', m.signature_valid, m.signature_check.reason);"],
+      },
+      {
+        app: true,
+        name: 'Approve mandate (returns PayPal approve_url)',
+        method: 'POST',
+        path: '/mandates/{{mandate_id}}/approve',
+        test: [
+          expectStatus(200),
+          "const r = pm.response.json(); pm.collectionVariables.set('mandate_approve_url', r.approve_url); console.log('Open as the BUYER:', r.approve_url);",
+        ],
+        description: 'Open approve_url in a browser as the buyer sandbox account. PayPal redirects to /mandates/{id}/vault-return, which signs the mandate and makes it ACTIVE.',
+      },
+      {
+        app: true,
+        name: 'Vault return (PayPal calls this in the browser; manual retry only)',
+        method: 'GET',
+        path: '/mandates/{{mandate_id}}/vault-return',
+        test: [expectStatus(200)],
+      },
+    ],
+  },
+  {
+    name: '1.2 Operators and agents',
+    description: 'Operator pre-authorizes liability payments (default limit 200.00 USD); agents belong to an operator.',
+    items: [
+      {
+        app: true,
+        name: 'Create operator',
+        method: 'POST',
+        path: '/operators',
+        body: { name: 'Acme Shopping Agents', email: '{{operator_email}}' },
+        test: [
+          expectStatus(201),
+          "const o = pm.response.json(); pm.collectionVariables.set('operator_id', o.id);",
+          "pm.test('default limit 200.00 USD', () => pm.expect(o.liability_limit).to.eql({ value: '200.00', currency: 'USD' }));",
+        ],
+      },
+      {
+        app: true,
+        name: 'Approve operator (returns PayPal approve_url)',
+        method: 'POST',
+        path: '/operators/{{operator_id}}/approve',
+        test: [expectStatus(200), "console.log('Open as the OPERATOR:', pm.response.json().approve_url);"],
+      },
+      {
+        app: true,
+        name: 'Get operator',
+        method: 'GET',
+        path: '/operators/{{operator_id}}',
+        test: [expectStatus(200), "const o = pm.response.json(); console.log(o.status, o.operator_vault_id);"],
+      },
+      {
+        app: true,
+        name: 'Create agent',
+        method: 'POST',
+        path: '/agents',
+        body: { operator_id: '{{operator_id}}', name: 'ShopBot', version: '1.0.0' },
+        test: [expectStatus(201), "pm.collectionVariables.set('agent_id', pm.response.json().id);"],
+      },
+      { app: true, name: 'Get agent', method: 'GET', path: '/agents/{{agent_id}}', test: [expectStatus(200)] },
+    ],
+  },
+];
+
+const phase2: Array<{ name: string; description: string; items: Req[] }> = [
+  {
+    name: '2.1 Merchant cart (Stride & Co)',
+    description: 'Shaped like PayPal Store Sync Cart API. Business problems come back as validation_issues on a 2xx cart. Run npm run seed first.',
+    items: [
+      {
+        app: true,
+        name: 'Create cart: Pegasus 41 US 10 (out of stock)',
+        method: 'POST',
+        path: '/merchant-cart',
+        body: { items: [{ variant_id: 'nike-pegasus-41-us-10', quantity: 1 }] },
+        test: [
+          expectStatus(201),
+          "const c = pm.response.json(); pm.collectionVariables.set('cart_id', c.id);",
+          "const i = c.validation_issues[0];",
+          "pm.test('INCOMPLETE', () => pm.expect(c.status).to.eql('INCOMPLETE'));",
+          "pm.test('ITEM_OUT_OF_STOCK', () => pm.expect(i.context.specific_issue).to.eql('ITEM_OUT_OF_STOCK'));",
+          "pm.test('substitute is the UK 10', () => pm.expect(i.suggested_substitute.variant_id).to.eql('nike-pegasus-41-uk-10'));",
+          "pm.test('message only says size 10', () => pm.expect(i.message).to.not.match(/US|UK/));",
+          'console.log(i.message);',
+        ],
+      },
+      { app: true, name: 'Get cart', method: 'GET', path: '/merchant-cart/{{cart_id}}', test: [expectStatus(200)] },
+      {
+        app: true,
+        name: 'Update cart: take the substitute (UK 10)',
+        method: 'PUT',
+        path: '/merchant-cart/{{cart_id}}',
+        body: { items: [{ variant_id: 'nike-pegasus-41-uk-10', quantity: 1 }] },
+        test: [expectStatus(200), "pm.test('READY', () => pm.expect(pm.response.json().status).to.eql('READY'));"],
+      },
+      {
+        app: true,
+        name: 'Checkout (501 until Phase 3)',
+        method: 'POST',
+        path: '/merchant-cart/{{cart_id}}/checkout',
+        body: {},
+        test: [expectStatus(501)],
+      },
+      {
+        app: true,
+        name: 'Create cart: unknown variant (DATA_ERROR, still 201)',
+        method: 'POST',
+        path: '/merchant-cart',
+        body: { items: [{ variant_id: 'does-not-exist', quantity: 1 }] },
+        test: [expectStatus(201), "pm.test('DATA_ERROR', () => pm.expect(pm.response.json().validation_issues[0].code).to.eql('DATA_ERROR'));"],
+      },
+    ],
+  },
+  {
+    name: '2.2 Flight recorder',
+    description: 'Hash chain per case_ref. The first request sets a fresh case_ref.',
+    items: [
+      {
+        app: true,
+        name: 'Append entry 1 (new case_ref)',
+        method: 'POST',
+        path: '/recorder/{{case_ref}}/entries',
+        prerequest: ["pm.collectionVariables.set('case_ref', 'CASE-' + Date.now());"],
+        body: { kind: 'mandate.read', payload: { mandate_id: '{{mandate_id}}', note: 'agent read the mandate' } },
+        test: [expectStatus(201), "pm.test('seq 1', () => pm.expect(pm.response.json().seq).to.eql(1));"],
+      },
+      {
+        app: true,
+        name: 'Append entry 2',
+        method: 'POST',
+        path: '/recorder/{{case_ref}}/entries',
+        body: { kind: 'merchant.cart.created', payload: { cart_id: '{{cart_id}}', variant_id: 'nike-pegasus-41-us-10', status: 'INCOMPLETE' } },
+        test: [expectStatus(201)],
+      },
+      {
+        app: true,
+        name: 'Append entry 3',
+        method: 'POST',
+        path: '/recorder/{{case_ref}}/entries',
+        body: { kind: 'agent.decision', payload: { accepted_substitute: 'nike-pegasus-41-uk-10', reason: 'merchant said size 10 is available' } },
+        test: [expectStatus(201)],
+      },
+      { app: true, name: 'List entries', method: 'GET', path: '/recorder/{{case_ref}}', test: [expectStatus(200)] },
+      {
+        app: true,
+        name: 'Verify chain',
+        method: 'GET',
+        path: '/recorder/{{case_ref}}/verify',
+        test: [expectStatus(200), "const v = pm.response.json(); console.log('valid', v.valid, 'first_broken_seq', v.first_broken_seq);"],
+      },
+    ],
+  },
+];
+
 function toItem(r: Req) {
   const [rawPath, query] = r.path.split('?');
+  const base = r.app ? '{{app_base_url}}' : '{{base_url}}';
   const url = {
-    raw: `{{base_url}}${r.path}`,
-    host: ['{{base_url}}'],
+    raw: `${base}${r.path}`,
+    host: [base],
     path: rawPath.split('/').filter(Boolean),
     ...(query
       ? { query: query.split('&').map((kv) => ({ key: kv.split('=')[0], value: kv.split('=')[1] ?? '' })) }
@@ -461,7 +671,9 @@ function toItem(r: Req) {
               ],
             },
           }
-        : {}),
+        : r.app
+          ? { auth: { type: 'noauth' } }
+          : {}),
       ...(body ? { body } : {}),
       url,
       ...(r.description ? { description: r.description } : {}),
@@ -470,6 +682,13 @@ function toItem(r: Req) {
 }
 
 const variables: Record<string, string> = {
+  app_base_url: 'http://localhost:3000',
+  mandate_id: '',
+  mandate_approve_url: '',
+  operator_id: '',
+  agent_id: '',
+  cart_id: '',
+  case_ref: '',
   base_url: 'https://api-m.sandbox.paypal.com',
   client_id: '',
   client_secret: '',
@@ -503,17 +722,26 @@ const variables: Record<string, string> = {
 
 const collection = {
   info: {
-    name: 'Recourse Phase 0 (PayPal sandbox)',
+    name: 'Recourse',
     description:
-      'Every PayPal sandbox call made by scripts/probes. Fill client_id, client_secret, buyer_email and operator_email, run "1 Auth / Get access token", then go folder by folder. Generated by scripts/postman/build.ts.',
+      'One folder per phase. Phase 0: every PayPal sandbox call made by scripts/probes (fill client_id, client_secret, buyer_email, operator_email; run "1 Auth / Get access token" first). Phases 1 and 2: the Recourse API at app_base_url (npm run dev). Hand checks: docs/phase1-2-checks.md. Generated by scripts/postman/build.ts.',
     schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
   },
   auth: { type: 'bearer', bearer: [{ key: 'token', value: '{{access_token}}', type: 'string' }] },
-  item: folders.map((f) => ({ name: f.name, description: f.description, item: f.items.map(toItem) })),
+  item: [
+    { name: 'Phase 0: PayPal sandbox probes', description: 'Direct PayPal sandbox calls (bearer {{access_token}}).', group: folders },
+    { name: 'Phase 1: Mandates and operators', description: 'Recourse API. Needs DATABASE_URL, RECOURSE_SIGNING_KEY and the AI_* settings.', group: phase1 },
+    { name: 'Phase 2: Demo merchant and flight recorder', description: 'Recourse API. Run npm run migrate and npm run seed first.', group: phase2 },
+  ].map((phase) => ({
+    name: phase.name,
+    description: phase.description,
+    item: phase.group.map((f) => ({ name: f.name, description: f.description, item: f.items.map(toItem) })),
+  })),
   variable: Object.entries(variables).map(([key, value]) => ({ key, value, type: 'string' })),
 };
 
 mkdirSync('postman', { recursive: true });
 writeFileSync('postman/recourse.postman_collection.json', json(collection) + '\n');
-const count = folders.reduce((n, f) => n + f.items.length, 0);
-console.log(`Wrote postman/recourse.postman_collection.json (${folders.length} folders, ${count} requests)`);
+const all = [...folders, ...phase1, ...phase2];
+const count = all.reduce((n, f) => n + f.items.length, 0);
+console.log(`Wrote postman/recourse.postman_collection.json (3 phases, ${all.length} folders, ${count} requests)`);

@@ -1,15 +1,7 @@
-import {
-  ExperienceContextShippingPreference,
-  VaultUserAction,
-  PaypalPaymentTokenCustomerType,
-  PaypalPaymentTokenUsageType,
-  UsagePattern,
-  VaultTokenRequestType,
-} from '@paypal/paypal-server-sdk';
+import { approveLink, createPaymentToken, createPaypalSetupToken, getSetupToken } from '../../src/paypal/vault';
 import { args, env, flag, requireValue, saveValues } from './env';
-import { requestId } from './http';
 import { showLinks } from './print';
-import { sdkCall, vault } from './sdk';
+import { printed } from './sdk';
 
 export type Role = 'BUYER' | 'OPERATOR';
 
@@ -20,34 +12,18 @@ export function role(): Role {
 
 const opFlag = (who: Role) => (who === 'OPERATOR' ? ' --operator' : '');
 
-export async function createPaypalSetupToken(who: Role): Promise<void> {
+export async function createPaypalSetupTokenProbe(who: Role): Promise<void> {
   const port = env('PORT', '8787');
-  const usage = env('VAULT_USAGE_PATTERN', 'IMMEDIATE') as UsagePattern;
-  const res = await sdkCall(`POST /v3/vault/setup-tokens (paypal, ${who.toLowerCase()})`, () =>
-    vault.createSetupToken({
-      paypalRequestId: requestId(),
-      body: {
-        paymentSource: {
-          paypal: {
-            description:
-              who === 'OPERATOR'
-                ? 'Recourse: agent operator pre-authorized liability payments'
-                : 'Recourse: buyer saved PayPal for agent checkout',
-            usagePattern: usage,
-            usageType: PaypalPaymentTokenUsageType.Merchant,
-            customerType: PaypalPaymentTokenCustomerType.Consumer,
-            permitMultiplePaymentTokens: false,
-            experienceContext: {
-              brandName: 'Recourse',
-              locale: 'en-US',
-              shippingPreference: ExperienceContextShippingPreference.NoShipping,
-              userAction: VaultUserAction.Continue,
-              returnUrl: env('RETURN_URL', `http://localhost:${port}/return`),
-              cancelUrl: env('CANCEL_URL', `http://localhost:${port}/cancel`),
-            },
-          },
-        },
-      },
+  const res = await printed(
+    `POST /v3/vault/setup-tokens (paypal, ${who.toLowerCase()})`,
+    createPaypalSetupToken({
+      description:
+        who === 'OPERATOR'
+          ? 'Recourse: agent operator pre-authorized liability payments'
+          : 'Recourse: buyer saved PayPal for agent checkout',
+      usagePattern: env('VAULT_USAGE_PATTERN', 'IMMEDIATE'),
+      returnUrl: env('RETURN_URL', `http://localhost:${port}/return`)!,
+      cancelUrl: env('CANCEL_URL', `http://localhost:${port}/cancel`)!,
     }),
   );
   if (res.status >= 300) {
@@ -59,9 +35,8 @@ export async function createPaypalSetupToken(who: Role): Promise<void> {
   }
   console.log('\nLinks:');
   showLinks(res.body.links);
-  const approve = res.body.links?.find((l: { rel: string }) => l.rel === 'approve')?.href;
   saveValues({ [`${who}_SETUP_TOKEN_ID`]: res.body.id });
-  console.log(`\nOpen this link and log in as the ${who.toLowerCase()} sandbox personal account:\n  ${approve}`);
+  console.log(`\nOpen this link and log in as the ${who.toLowerCase()} sandbox personal account:\n  ${approveLink(res.body)}`);
   console.log(`Then run: npx tsx scripts/probes/02b-vault-payment-token.ts${opFlag(who)}`);
 }
 
@@ -69,14 +44,8 @@ export async function exchangeSetupToken(who: Role): Promise<void> {
   const setupTokenId =
     args()[0] ?? requireValue(`${who}_SETUP_TOKEN_ID`, `Run 02a-vault-setup-token.ts${opFlag(who)} first.`);
 
-  await sdkCall(`GET /v3/vault/setup-tokens/${setupTokenId}`, () => vault.getSetupToken(setupTokenId));
-
-  const res = await sdkCall('POST /v3/vault/payment-tokens', () =>
-    vault.createPaymentToken({
-      paypalRequestId: requestId(),
-      body: { paymentSource: { token: { id: setupTokenId, type: VaultTokenRequestType.SetupToken } } },
-    }),
-  );
+  await printed(`GET /v3/vault/setup-tokens/${setupTokenId}`, getSetupToken(setupTokenId));
+  const res = await printed('POST /v3/vault/payment-tokens', createPaymentToken(setupTokenId));
   if (res.status >= 300) process.exit(1);
 
   const vaultId: string = res.body.id;
