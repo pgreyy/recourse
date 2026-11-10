@@ -9,11 +9,12 @@ import { uuidParam } from '../shared/http/ids';
 import { compileMandate } from './mandate-compiler';
 import { checkMandateSignature, signMandate, type MandateRow } from './mandate-document';
 import { MandateSpec } from './mandate-spec';
+import { mandateUsage } from './mandate-usage';
 import { finishVaulting, getToken, startVaulting, tokenView } from './payment-tokens';
 
 export const mandates = Router();
 
-type Row = MandateRow & {
+export type Row = MandateRow & {
   buyer_id: string;
   supersedes_id: string | null;
   status: 'DRAFT' | 'ACTIVE' | 'CONSUMED' | 'EXPIRED' | 'REVOKED' | 'SUPERSEDED';
@@ -31,6 +32,10 @@ const SELECT = `SELECT m.*, b.email AS buyer_email, pt.vault_id
                 LEFT JOIN payment_tokens pt ON pt.id = m.payment_token_id`;
 
 /** Load one version; an ACTIVE mandate past expires_at becomes EXPIRED on read. */
+export async function loadMandate(id: string, c: pg.Pool | pg.PoolClient = db()): Promise<Row> {
+  return load(id, c);
+}
+
 async function load(id: string, c: pg.Pool | pg.PoolClient = db()): Promise<Row> {
   const { rows } = await c.query<Row>(`${SELECT} WHERE m.id = $1`, [id]);
   const row = rows[0];
@@ -42,23 +47,20 @@ async function load(id: string, c: pg.Pool | pg.PoolClient = db()): Promise<Row>
   return row;
 }
 
-/**
- * Remaining budget across the whole lineage (all versions, all orders), per the aggregate rule.
- * Orders arrive in Phase 3; until then nothing has been spent.
- */
-function budget(row: Row) {
+/** Remaining budget across the whole lineage (all versions, all captured orders), per the aggregate rule. */
+async function budget(row: Row) {
   const spec = row.spec as MandateSpec;
-  const spentCents = 0;
-  const ordersPlaced = 0;
+  const used = await mandateUsage(row.lineage_id);
   const maxCents = Math.round(Number(spec.max_total.value) * 100);
   return {
     rule: 'aggregate across all orders under this mandate, tax and shipping included',
     max_total: spec.max_total,
-    spent: { value: (spentCents / 100).toFixed(2), currency: spec.max_total.currency },
-    remaining: { value: (Math.max(0, maxCents - spentCents) / 100).toFixed(2), currency: spec.max_total.currency },
-    orders_placed: ordersPlaced,
+    spent: { value: (used.spent_cents / 100).toFixed(2), currency: spec.max_total.currency },
+    remaining: { value: (Math.max(0, maxCents - used.spent_cents) / 100).toFixed(2), currency: spec.max_total.currency },
+    orders_placed: used.orders_placed,
     max_orders: spec.max_orders,
-    orders_remaining: Math.max(0, spec.max_orders - ordersPlaced),
+    orders_remaining: Math.max(0, spec.max_orders - used.orders_placed),
+    units_bought: used.units_bought,
   };
 }
 
@@ -83,7 +85,7 @@ async function view(row: Row) {
     buyer_email: row.buyer_email,
     source_text: row.source_text,
     spec: row.spec,
-    remaining_budget: budget(row),
+    remaining_budget: await budget(row),
     expires_at: row.expires_at,
     payment_method: tokenView(await getToken(row.payment_token_id)),
     llm: { provider: row.llm_provider, model: row.llm_model },

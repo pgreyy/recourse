@@ -1,5 +1,5 @@
-// npm run seed: load data/catalog.json into the merchant tables. Safe to rerun: it upserts and
-// resets every variant to the file's price, stock, attributes and description.
+// npm run seed: load data/catalog.json into the merchant tables. Safe to rerun: it upserts, resets every
+// variant to the file's price, stock, attributes and description, and removes rows not in the file.
 import { closeDb, tx } from '../shared/db/pool';
 import { readCatalogFile } from './catalog';
 
@@ -8,10 +8,10 @@ async function main(): Promise<void> {
   const m = catalog.merchant;
   const counts = await tx(async (c) => {
     await c.query(
-      `INSERT INTO merchants (id, name, currency, catalog_version) VALUES ($1, $2, $3, $4)
+      `INSERT INTO merchants (id, name, currency, catalog_version, delivery_days) VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, currency = EXCLUDED.currency,
-         catalog_version = EXCLUDED.catalog_version, updated_at = now()`,
-      [m.id, m.name, m.currency, catalog.catalog_version],
+         catalog_version = EXCLUDED.catalog_version, delivery_days = EXCLUDED.delivery_days, updated_at = now()`,
+      [m.id, m.name, m.currency, catalog.catalog_version, m.delivery_days],
     );
     let variants = 0;
     for (const l of catalog.listings) {
@@ -31,9 +31,19 @@ async function main(): Promise<void> {
         variants++;
       }
     }
-    return { listings: catalog.listings.length, variants };
+    // The file is the whole catalog: drop listings and variants that are no longer in it. Orders, carts
+    // and snapshots keep their own copies of what was sold, so nothing historical points at these rows.
+    const listingIds = catalog.listings.map((l) => l.id);
+    const variantIds = catalog.listings.flatMap((l) => l.variants.map((v) => v.id));
+    const removedVariants = await c.query(
+      `DELETE FROM merchant_variants v USING merchant_listings l
+       WHERE v.listing_id = l.id AND l.merchant_id = $1 AND NOT (v.id = ANY($2::text[]))`,
+      [m.id, variantIds],
+    );
+    const removedListings = await c.query('DELETE FROM merchant_listings WHERE merchant_id = $1 AND NOT (id = ANY($2::text[]))', [m.id, listingIds]);
+    return { listings: catalog.listings.length, variants, removed: (removedListings.rowCount ?? 0) + (removedVariants.rowCount ?? 0) };
   });
-  console.log(`Seeded ${m.name} catalog ${catalog.catalog_version}: ${counts.listings} listings, ${counts.variants} variants.`);
+  console.log(`Seeded ${m.name} catalog ${catalog.catalog_version}: ${counts.listings} listings, ${counts.variants} variants; removed ${counts.removed} rows no longer in the file.`);
 }
 
 main()

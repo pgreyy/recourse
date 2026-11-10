@@ -84,9 +84,10 @@ export type Answered = { provider: Provider; modelId: string; role: string; fall
 export async function runWithFallback<T>(
   task: string,
   fn: (c: Candidate) => Promise<T>,
-  opts: { canFallback?: () => boolean } = {},
+  opts: { canFallback?: () => boolean; only?: Provider } = {},
 ): Promise<{ value: T } & Answered> {
-  const chain = candidateModels();
+  const chain = candidateModels().filter((c) => !opts.only || c.provider === opts.only);
+  if (!chain.length) throw new ConfigError(`no configured model for provider ${opts.only}`);
   const failures: string[] = [];
   for (let i = 0; i < chain.length; i++) {
     const c = chain[i];

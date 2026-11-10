@@ -1561,7 +1561,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"buyer_email\": \"{{buyer_email}}\",\n  \"text\": \"Running shoes, US men's 10, under $120, Nike or Asics, delivered by Friday\"\n}",
+                  "raw": "{\n  \"buyer_email\": \"{{buyer_email}}\",\n  \"text\": \"Running shoes, US men's 10, under $120, Kestrel or Sorin, delivered by Friday\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2299,7 +2299,7 @@
           "description": "Shaped like PayPal Store Sync Cart API. Every response carries a catalog snapshot whose sha256 goes into the recorder. Run npm run seed first.",
           "item": [
             {
-              "name": "Create cart: Pegasus 41 US 10 (out of stock)",
+              "name": "Create cart: Kestrel Glide 4 US 10 (out of stock)",
               "event": [
                 {
                   "listen": "prerequest",
@@ -2321,7 +2321,7 @@
                       "pm.collectionVariables.set('snapshot_id', c.catalog_snapshot.id);",
                       "pm.test('INCOMPLETE', () => pm.expect(c.status).to.eql('INCOMPLETE'));",
                       "pm.test('ITEM_OUT_OF_STOCK', () => pm.expect(i.context.specific_issue).to.eql('ITEM_OUT_OF_STOCK'));",
-                      "pm.test('substitute is the missing-unit variant', () => { pm.expect(i.suggested_substitute.variant_id).to.eql('nike-pegasus-41-10'); pm.expect(i.suggested_substitute.attributes.unit_system).to.eql(null); });",
+                      "pm.test('substitute is the missing-unit variant', () => { pm.expect(i.suggested_substitute.variant_id).to.eql('kestrel-glide-4-10'); pm.expect(i.suggested_substitute.attributes.unit_system).to.eql(null); });",
                       "pm.test('described only as size 10', () => { pm.expect(i.suggested_substitute.description).to.eql('size 10'); pm.expect(i.message).to.not.match(/US|UK/); });",
                       "pm.test('snapshot with sha256', () => pm.expect(c.catalog_snapshot.sha256).to.match(/^[0-9a-f]{64}$/));",
                       "console.log(i.message, '| snapshot', c.catalog_snapshot.sha256, '| recorder seq', c.recorder.seq);"
@@ -2342,7 +2342,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"variant_id\": \"nike-pegasus-41-us-10\",\n      \"quantity\": 1\n    }\n  ],\n  \"case_ref\": \"{{case_ref}}\"\n}",
+                  "raw": "{\n  \"items\": [\n    {\n      \"variant_id\": \"kestrel-glide-4-us-10\",\n      \"quantity\": 1\n    }\n  ],\n  \"case_ref\": \"{{case_ref}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2392,7 +2392,7 @@
               }
             },
             {
-              "name": "Update cart: compliant alternative (Gel-Nimbus US 10)",
+              "name": "Update cart: compliant alternative (Sorin Cloudline US 10)",
               "event": [
                 {
                   "listen": "test",
@@ -2418,7 +2418,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"variant_id\": \"asics-gel-nimbus-27-us-10\",\n      \"quantity\": 1\n    }\n  ]\n}",
+                  "raw": "{\n  \"items\": [\n    {\n      \"variant_id\": \"sorin-cloudline-us-10\",\n      \"quantity\": 1\n    }\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2634,6 +2634,623 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Phase 3: Agent and checkout",
+      "description": "Agent runs, deterministic firewall, anchored PayPal checkout. Run npm run seed:agents first.",
+      "item": [
+        {
+          "name": "3.1 Agent run",
+          "description": "Seed with npm run seed:agents. The mandate must be ACTIVE (approved by the buyer). Runs can take 30-90 s.",
+          "item": [
+            {
+              "name": "List agent versions",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const v = pm.response.json();",
+                      "const fast = v.find(x => x.version === '1.3'); const careful = v.find(x => x.version === '2.0');",
+                      "if (fast) pm.collectionVariables.set('agent_v13_id', fast.agent_version_id);",
+                      "if (careful) pm.collectionVariables.set('agent_v20_id', careful.agent_version_id);",
+                      "const drift = v.find(x => x.name === 'Drift Shopper'); if (drift) pm.collectionVariables.set('agent_drift_id', drift.agent_version_id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/agent/versions",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "agent",
+                    "versions"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Dry run: Acme Shopper v1.3 (no charge, works on a DRAFT mandate)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json(); console.log(r.outcome, 'would', r.preview && r.preview.would, 'chose', r.preview && r.preview.lines.map(l => l.variant_id).join(','));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mandate_id\": \"{{mandate_id}}\",\n  \"agent_version_id\": \"{{agent_v13_id}}\",\n  \"dry_run\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/agent/run",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "agent",
+                    "run"
+                  ]
+                },
+                "description": "Add \"provider\": \"openai\" or \"gemini\" to pin one provider."
+              }
+            },
+            {
+              "name": "Scenario A: run Acme Shopper v1.3 (fast)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "pm.collectionVariables.set('run_case_ref', r.case_ref);",
+                      "if (r.checkout && r.checkout.order) { pm.collectionVariables.set('order_ref', r.checkout.order.order_ref); pm.collectionVariables.set('receipt_url', r.checkout.receipt_url); }",
+                      "console.log(r.outcome, 'model', r.model.id, '| firewall', r.checkout && r.checkout.firewall && r.checkout.firewall.decision, '| receipt', r.checkout && r.checkout.receipt_url);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mandate_id\": \"{{mandate_id}}\",\n  \"agent_version_id\": \"{{agent_v13_id}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/agent/run",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "agent",
+                    "run"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Scenario B: run Acme Shopper v2.0 (careful)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "pm.collectionVariables.set('run_case_ref', r.case_ref);",
+                      "if (r.checkout && r.checkout.order) { pm.collectionVariables.set('order_ref', r.checkout.order.order_ref); pm.collectionVariables.set('receipt_url', r.checkout.receipt_url); pm.collectionVariables.set('checkout_cart_id', r.checkout.order.cart_id); pm.collectionVariables.set('checkout_request_id', r.checkout.order.paypal.request_id); }",
+                      "console.log(r.outcome, 'model', r.model.id, '| compliance', r.checkout && r.checkout.order && r.checkout.order.compliance);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mandate_id\": \"{{mandate_b_id}}\",\n  \"agent_version_id\": \"{{agent_v20_id}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/agent/run",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "agent",
+                    "run"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Verify the run case recorder",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/recorder/{{run_case_ref}}/verify",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "recorder",
+                    "{{run_case_ref}}",
+                    "verify"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get order",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/orders/{{order_ref}}",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "orders",
+                    "{{order_ref}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.2 Checkout and firewall",
+          "description": "Direct checkout through the Store Sync endpoint. request_id makes it idempotent.",
+          "item": [
+            {
+              "name": "Create cart: Sorin Cloudline US 10 (115.00)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('case_ref', 'CASE-' + Date.now());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "pm.collectionVariables.set('cart_id', pm.response.json().id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    {\n      \"variant_id\": \"sorin-cloudline-us-10\",\n      \"quantity\": 1\n    }\n  ],\n  \"case_ref\": \"{{case_ref}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/merchant-cart",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "merchant-cart"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Checkout as Drift Shopper, no liability agreement (expect 422 STEP_UP_REQUIRED)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                      "const r = pm.response.json(); pm.test('coverage', () => pm.expect(r.details.map(d => d.description)).to.include('agent not covered by an operator liability agreement'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mandate_id\": \"{{mandate_id}}\",\n  \"agent_version_id\": \"{{agent_drift_id}}\",\n  \"request_id\": \"drift-{{case_ref}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/merchant-cart/{{cart_id}}/checkout",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "merchant-cart",
+                    "{{cart_id}}",
+                    "checkout"
+                  ]
+                },
+                "description": "Needs an ACTIVE mandate in mandate_id. Nothing is charged."
+              }
+            },
+            {
+              "name": "Checkout under a mandate below 100 (expect 422 STEP_UP_REQUIRED)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                      "const r = pm.response.json(); pm.test('STEP_UP_REQUIRED', () => pm.expect(r.name).to.eql('STEP_UP_REQUIRED'));",
+                      "console.log(r.details.map(d => d.description).join(' | '), '| approve:', r.step_up.approve_url);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mandate_id\": \"{{mandate_id}}\",\n  \"request_id\": \"firewall-{{case_ref}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/merchant-cart/{{cart_id}}/checkout",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "merchant-cart",
+                    "{{cart_id}}",
+                    "checkout"
+                  ]
+                },
+                "description": "First edit the mandate to max_total 99.00 (1.1 Mandates / Edit mandate) so the 115.00 shoe breaks the budget."
+              }
+            },
+            {
+              "name": "Repeat a captured checkout with the same request_id (no second charge)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('replayed, same order', () => { const r = pm.response.json(); pm.expect(r.replayed).to.eql(true); pm.expect(r.order.order_ref).to.eql(pm.collectionVariables.get('order_ref')); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mandate_id\": \"{{mandate_b_id}}\",\n  \"request_id\": \"{{checkout_request_id}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/merchant-cart/{{checkout_cart_id}}/checkout",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "merchant-cart",
+                    "{{checkout_cart_id}}",
+                    "checkout"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Phase 3b: Ratification receipt",
+      "description": "Receipt page, signed confirmation, issue reports.",
+      "item": [
+        {
+          "name": "3b Ratification receipt",
+          "description": "Open receipt_url in a browser (it is an HTML page). These requests fetch the same receipt as JSON.",
+          "item": [
+            {
+              "name": "Receipt as JSON",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const u = pm.collectionVariables.get('receipt_url') || ''; pm.collectionVariables.set('receipt_path', u.replace(/^https?:\\/\\/[^/]+/, ''));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json(); console.log(r.compliance, '| differences:', r.differences.join(' ; '));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}{{receipt_path}}",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "{{receipt_path}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Confirm purchase (signed acknowledgement)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('CONFIRMED', () => pm.expect(pm.response.json().receipt_status).to.eql('CONFIRMED'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}{{receipt_path}}/confirm",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "{{receipt_path}}",
+                    "confirm"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Report an issue (opens a case, no PayPal dispute)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('case OPEN', () => pm.expect(pm.response.json().cases.slice(-1)[0].status).to.eql('OPEN'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"description\": \"The shoes are UK sizing, not the US 10 I asked for.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}{{receipt_path}}/report",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "{{receipt_path}}",
+                    "report"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -2684,6 +3301,56 @@
     },
     {
       "key": "case_ref",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mandate_b_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "agent_v13_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "agent_v20_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "agent_drift_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "run_case_ref",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "order_ref",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "receipt_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "receipt_path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "checkout_cart_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "checkout_request_id",
       "value": "",
       "type": "string"
     },

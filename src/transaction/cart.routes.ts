@@ -28,7 +28,7 @@ const CartBody = z
   })
   .passthrough();
 
-type CartRow = {
+export type CartRow = {
   id: string;
   merchant_id: string;
   case_ref: string;
@@ -109,58 +109,59 @@ async function respond(cart: CartRow, kind: string) {
   };
 }
 
-/** POST /merchant-cart { items, case_ref? }: case_ref defaults to the cart id. */
+export type CartResponse = Awaited<ReturnType<typeof respond>>;
+type CartInput = { items: Array<{ variant_id: string; quantity: number }>; customer?: unknown; shipping_address?: unknown };
+
+/** Create a cart (service used by the HTTP route and by agent tools). case_ref defaults to the cart id. */
+export async function createCart(input: CartInput, caseRef?: string): Promise<CartResponse> {
+  await merchant(DEMO_MERCHANT.id);
+  const id = `CART-${randomBytes(8).toString('hex').toUpperCase()}`;
+  const items = input.items.map((i) => ({ variant_id: i.variant_id, quantity: i.quantity }));
+  const { rows } = await db().query<CartRow>(
+    `INSERT INTO carts (id, merchant_id, case_ref, items, customer, shipping_address) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [id, DEMO_MERCHANT.id, caseRef ?? id, JSON.stringify(items), input.customer ? JSON.stringify(input.customer) : null, input.shipping_address ? JSON.stringify(input.shipping_address) : null],
+  );
+  return respond(rows[0], 'merchant.cart.created');
+}
+
+/** Replace a cart's writable fields, as the Cart API's PUT does. */
+export async function updateCart(id: string, input: CartInput): Promise<CartResponse> {
+  const current = await load(id);
+  if (current.status === 'COMPLETED') throw new HttpError(422, 'CART_COMPLETED', 'Cart is already checked out.');
+  const items = input.items.map((i) => ({ variant_id: i.variant_id, quantity: i.quantity }));
+  const { rows } = await db().query<CartRow>(
+    `UPDATE carts SET items = $2, customer = COALESCE($3, customer), shipping_address = COALESCE($4, shipping_address), updated_at = now()
+     WHERE id = $1 RETURNING *`,
+    [current.id, JSON.stringify(items), input.customer ? JSON.stringify(input.customer) : null, input.shipping_address ? JSON.stringify(input.shipping_address) : null],
+  );
+  return respond(rows[0], 'merchant.cart.updated');
+}
+
+export async function getCart(id: string): Promise<CartResponse> {
+  return respond(await load(id), 'merchant.cart.viewed');
+}
+
+export { load as loadCartRow };
+
+/** POST /merchant-cart { items, case_ref? } */
 merchantCart.post(
   '/',
   route(async (req, res) => {
     const body = CartBody.parse(req.body);
-    await merchant(DEMO_MERCHANT.id);
-    const id = `CART-${randomBytes(8).toString('hex').toUpperCase()}`;
-    const items = body.items.map((i) => ({ variant_id: i.variant_id, quantity: i.quantity }));
-    const { rows } = await db().query<CartRow>(
-      `INSERT INTO carts (id, merchant_id, case_ref, items, customer, shipping_address) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [
-        id,
-        DEMO_MERCHANT.id,
-        body.case_ref ?? id,
-        JSON.stringify(items),
-        body.customer ? JSON.stringify(body.customer) : null,
-        body.shipping_address ? JSON.stringify(body.shipping_address) : null,
-      ],
-    );
-    res.status(201).json(await respond(rows[0], 'merchant.cart.created'));
+    res.status(201).json(await createCart(body, body.case_ref));
   }),
 );
 
 merchantCart.get(
   '/:id',
   route(async (req, res) => {
-    res.json(await respond(await load(req.params.id), 'merchant.cart.viewed'));
+    res.json(await getCart(req.params.id));
   }),
 );
 
-/** PUT replaces the writable fields (items, customer, shipping_address), as the Cart API does. */
 merchantCart.put(
   '/:id',
   route(async (req, res) => {
-    const current = await load(req.params.id);
-    if (current.status === 'COMPLETED') throw new HttpError(422, 'CART_COMPLETED', 'Cart is already checked out.');
-    const body = CartBody.parse(req.body);
-    const items = body.items.map((i) => ({ variant_id: i.variant_id, quantity: i.quantity }));
-    const { rows } = await db().query<CartRow>(
-      `UPDATE carts SET items = $2, customer = COALESCE($3, customer), shipping_address = COALESCE($4, shipping_address), updated_at = now()
-       WHERE id = $1 RETURNING *`,
-      [current.id, JSON.stringify(items), body.customer ? JSON.stringify(body.customer) : null, body.shipping_address ? JSON.stringify(body.shipping_address) : null],
-    );
-    res.json(await respond(rows[0], 'merchant.cart.updated'));
-  }),
-);
-
-/** Phase 3 wires this to PayPal. */
-merchantCart.post(
-  '/:id/checkout',
-  route(async (req, res) => {
-    await load(req.params.id);
-    res.status(501).json({ name: 'NOT_IMPLEMENTED', message: 'Checkout is not wired to PayPal yet (Phase 3).' });
+    res.json(await updateCart(req.params.id, CartBody.parse(req.body)));
   }),
 );

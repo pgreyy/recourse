@@ -454,7 +454,7 @@ const phase1: Array<{ name: string; description: string; items: Req[] }> = [
         name: 'Create mandate',
         method: 'POST',
         path: '/mandates',
-        body: { buyer_email: '{{buyer_email}}', text: "Running shoes, US men's 10, under $120, Nike or Asics, delivered by Friday" },
+        body: { buyer_email: '{{buyer_email}}', text: "Running shoes, US men's 10, under $120, Kestrel or Sorin, delivered by Friday" },
         test: [
           expectStatus(201),
           'const m = pm.response.json();',
@@ -606,11 +606,11 @@ const phase2: Array<{ name: string; description: string; items: Req[] }> = [
     items: [
       {
         app: true,
-        name: 'Create cart: Pegasus 41 US 10 (out of stock)',
+        name: 'Create cart: Kestrel Glide 4 US 10 (out of stock)',
         method: 'POST',
         path: '/merchant-cart',
         prerequest: ["pm.collectionVariables.set('case_ref', 'CASE-' + Date.now());"],
-        body: { items: [{ variant_id: 'nike-pegasus-41-us-10', quantity: 1 }], case_ref: '{{case_ref}}' },
+        body: { items: [{ variant_id: 'kestrel-glide-4-us-10', quantity: 1 }], case_ref: '{{case_ref}}' },
         test: [
           expectStatus(201),
           'const c = pm.response.json(); const i = c.validation_issues[0];',
@@ -618,7 +618,7 @@ const phase2: Array<{ name: string; description: string; items: Req[] }> = [
           saveVar('snapshot_id', 'c.catalog_snapshot.id'),
           "pm.test('INCOMPLETE', () => pm.expect(c.status).to.eql('INCOMPLETE'));",
           "pm.test('ITEM_OUT_OF_STOCK', () => pm.expect(i.context.specific_issue).to.eql('ITEM_OUT_OF_STOCK'));",
-          "pm.test('substitute is the missing-unit variant', () => { pm.expect(i.suggested_substitute.variant_id).to.eql('nike-pegasus-41-10'); pm.expect(i.suggested_substitute.attributes.unit_system).to.eql(null); });",
+          "pm.test('substitute is the missing-unit variant', () => { pm.expect(i.suggested_substitute.variant_id).to.eql('kestrel-glide-4-10'); pm.expect(i.suggested_substitute.attributes.unit_system).to.eql(null); });",
           "pm.test('described only as size 10', () => { pm.expect(i.suggested_substitute.description).to.eql('size 10'); pm.expect(i.message).to.not.match(/US|UK/); });",
           "pm.test('snapshot with sha256', () => pm.expect(c.catalog_snapshot.sha256).to.match(/^[0-9a-f]{64}$/));",
           "console.log(i.message, '| snapshot', c.catalog_snapshot.sha256, '| recorder seq', c.recorder.seq);",
@@ -627,10 +627,10 @@ const phase2: Array<{ name: string; description: string; items: Req[] }> = [
       { app: true, name: 'Get cart', method: 'GET', path: '/merchant-cart/{{cart_id}}', test: [expectStatus(200)] },
       {
         app: true,
-        name: 'Update cart: compliant alternative (Gel-Nimbus US 10)',
+        name: 'Update cart: compliant alternative (Sorin Cloudline US 10)',
         method: 'PUT',
         path: '/merchant-cart/{{cart_id}}',
-        body: { items: [{ variant_id: 'asics-gel-nimbus-27-us-10', quantity: 1 }] },
+        body: { items: [{ variant_id: 'sorin-cloudline-us-10', quantity: 1 }] },
         test: [expectStatus(200), "pm.test('READY 115.00', () => { const c = pm.response.json(); pm.expect(c.status).to.eql('READY'); pm.expect(c.totals.total.value).to.eql('115.00'); });"],
       },
       { app: true, name: 'Checkout (501 until Phase 3)', method: 'POST', path: '/merchant-cart/{{cart_id}}/checkout', body: {}, test: [expectStatus(501)] },
@@ -662,6 +662,152 @@ const phase2: Array<{ name: string; description: string; items: Req[] }> = [
         method: 'GET',
         path: '/recorder/{{case_ref}}/verify',
         test: [expectStatus(200), "const v = pm.response.json(); console.log('valid', v.valid, 'first_problem', JSON.stringify(v.first_problem), 'checkpoints', JSON.stringify(v.checkpoints));"],
+      },
+    ],
+  },
+];
+
+const phase3: Array<{ name: string; description: string; items: Req[] }> = [
+  {
+    name: '3.1 Agent run',
+    description: 'Seed with npm run seed:agents. The mandate must be ACTIVE (approved by the buyer). Runs can take 30-90 s.',
+    items: [
+      {
+        app: true,
+        name: 'List agent versions',
+        method: 'GET',
+        path: '/agent/versions',
+        test: [
+          expectStatus(200),
+          "const v = pm.response.json();",
+          "const fast = v.find(x => x.version === '1.3'); const careful = v.find(x => x.version === '2.0');",
+          "if (fast) pm.collectionVariables.set('agent_v13_id', fast.agent_version_id);",
+          "if (careful) pm.collectionVariables.set('agent_v20_id', careful.agent_version_id);",
+          "const drift = v.find(x => x.name === 'Drift Shopper'); if (drift) pm.collectionVariables.set('agent_drift_id', drift.agent_version_id);",
+        ],
+      },
+      {
+        app: true,
+        name: 'Dry run: Acme Shopper v1.3 (no charge, works on a DRAFT mandate)',
+        method: 'POST',
+        path: '/agent/run',
+        body: { mandate_id: '{{mandate_id}}', agent_version_id: '{{agent_v13_id}}', dry_run: true },
+        test: [expectStatus(200), "const r = pm.response.json(); console.log(r.outcome, 'would', r.preview && r.preview.would, 'chose', r.preview && r.preview.lines.map(l => l.variant_id).join(','));"],
+        description: 'Add "provider": "openai" or "gemini" to pin one provider.',
+      },
+      {
+        app: true,
+        name: 'Scenario A: run Acme Shopper v1.3 (fast)',
+        method: 'POST',
+        path: '/agent/run',
+        body: { mandate_id: '{{mandate_id}}', agent_version_id: '{{agent_v13_id}}' },
+        test: [
+          expectStatus(200),
+          'const r = pm.response.json();',
+          saveVar('run_case_ref', 'r.case_ref'),
+          "if (r.checkout && r.checkout.order) { pm.collectionVariables.set('order_ref', r.checkout.order.order_ref); pm.collectionVariables.set('receipt_url', r.checkout.receipt_url); }",
+          "console.log(r.outcome, 'model', r.model.id, '| firewall', r.checkout && r.checkout.firewall && r.checkout.firewall.decision, '| receipt', r.checkout && r.checkout.receipt_url);",
+        ],
+      },
+      {
+        app: true,
+        name: 'Scenario B: run Acme Shopper v2.0 (careful)',
+        method: 'POST',
+        path: '/agent/run',
+        body: { mandate_id: '{{mandate_b_id}}', agent_version_id: '{{agent_v20_id}}' },
+        test: [
+          expectStatus(200),
+          'const r = pm.response.json();',
+          saveVar('run_case_ref', 'r.case_ref'),
+          "if (r.checkout && r.checkout.order) { pm.collectionVariables.set('order_ref', r.checkout.order.order_ref); pm.collectionVariables.set('receipt_url', r.checkout.receipt_url); pm.collectionVariables.set('checkout_cart_id', r.checkout.order.cart_id); pm.collectionVariables.set('checkout_request_id', r.checkout.order.paypal.request_id); }",
+          "console.log(r.outcome, 'model', r.model.id, '| compliance', r.checkout && r.checkout.order && r.checkout.order.compliance);",
+        ],
+      },
+      { app: true, name: 'Verify the run case recorder', method: 'GET', path: '/recorder/{{run_case_ref}}/verify', test: [expectStatus(200)] },
+      { app: true, name: 'Get order', method: 'GET', path: '/orders/{{order_ref}}', test: [expectStatus(200)] },
+    ],
+  },
+  {
+    name: '3.2 Checkout and firewall',
+    description: 'Direct checkout through the Store Sync endpoint. request_id makes it idempotent.',
+    items: [
+      {
+        app: true,
+        name: 'Create cart: Sorin Cloudline US 10 (115.00)',
+        method: 'POST',
+        path: '/merchant-cart',
+        prerequest: ["pm.collectionVariables.set('case_ref', 'CASE-' + Date.now());"],
+        body: { items: [{ variant_id: 'sorin-cloudline-us-10', quantity: 1 }], case_ref: '{{case_ref}}' },
+        test: [expectStatus(201), saveVar('cart_id', 'pm.response.json().id')],
+      },
+      {
+        app: true,
+        name: 'Checkout as Drift Shopper, no liability agreement (expect 422 STEP_UP_REQUIRED)',
+        method: 'POST',
+        path: '/merchant-cart/{{cart_id}}/checkout',
+        body: { mandate_id: '{{mandate_id}}', agent_version_id: '{{agent_drift_id}}', request_id: 'drift-{{case_ref}}' },
+        test: [
+          expectStatus(422),
+          "const r = pm.response.json(); pm.test('coverage', () => pm.expect(r.details.map(d => d.description)).to.include('agent not covered by an operator liability agreement'));",
+        ],
+        description: 'Needs an ACTIVE mandate in mandate_id. Nothing is charged.',
+      },
+      {
+        app: true,
+        name: 'Checkout under a mandate below 100 (expect 422 STEP_UP_REQUIRED)',
+        method: 'POST',
+        path: '/merchant-cart/{{cart_id}}/checkout',
+        body: { mandate_id: '{{mandate_id}}', request_id: 'firewall-{{case_ref}}' },
+        test: [
+          expectStatus(422),
+          "const r = pm.response.json(); pm.test('STEP_UP_REQUIRED', () => pm.expect(r.name).to.eql('STEP_UP_REQUIRED'));",
+          "console.log(r.details.map(d => d.description).join(' | '), '| approve:', r.step_up.approve_url);",
+        ],
+        description: 'First edit the mandate to max_total 99.00 (1.1 Mandates / Edit mandate) so the 115.00 shoe breaks the budget.',
+      },
+      {
+        app: true,
+        name: 'Repeat a captured checkout with the same request_id (no second charge)',
+        method: 'POST',
+        path: '/merchant-cart/{{checkout_cart_id}}/checkout',
+        body: { mandate_id: '{{mandate_b_id}}', request_id: '{{checkout_request_id}}' },
+        test: [expectStatus(200), "pm.test('replayed, same order', () => { const r = pm.response.json(); pm.expect(r.replayed).to.eql(true); pm.expect(r.order.order_ref).to.eql(pm.collectionVariables.get('order_ref')); });"],
+      },
+    ],
+  },
+];
+
+const phase3b: Array<{ name: string; description: string; items: Req[] }> = [
+  {
+    name: '3b Ratification receipt',
+    description: 'Open receipt_url in a browser (it is an HTML page). These requests fetch the same receipt as JSON.',
+    items: [
+      {
+        app: true,
+        name: 'Receipt as JSON',
+        method: 'GET',
+        path: '{{receipt_path}}',
+        headers: { Accept: 'application/json' },
+        prerequest: ["const u = pm.collectionVariables.get('receipt_url') || ''; pm.collectionVariables.set('receipt_path', u.replace(/^https?:\\/\\/[^/]+/, ''));"],
+        test: [expectStatus(200), "const r = pm.response.json(); console.log(r.compliance, '| differences:', r.differences.join(' ; '));"],
+      },
+      {
+        app: true,
+        name: 'Confirm purchase (signed acknowledgement)',
+        method: 'POST',
+        path: '{{receipt_path}}/confirm',
+        headers: { Accept: 'application/json' },
+        body: {},
+        test: [expectStatus(200), "pm.test('CONFIRMED', () => pm.expect(pm.response.json().receipt_status).to.eql('CONFIRMED'));"],
+      },
+      {
+        app: true,
+        name: 'Report an issue (opens a case, no PayPal dispute)',
+        method: 'POST',
+        path: '{{receipt_path}}/report',
+        headers: { Accept: 'application/json' },
+        body: { description: 'The shoes are UK sizing, not the US 10 I asked for.' },
+        test: [expectStatus(200), "pm.test('case OPEN', () => pm.expect(pm.response.json().cases.slice(-1)[0].status).to.eql('OPEN'));"],
       },
     ],
   },
@@ -729,6 +875,16 @@ const variables: Record<string, string> = {
   cart_id: '',
   snapshot_id: '',
   case_ref: '',
+  mandate_b_id: '',
+  agent_v13_id: '',
+  agent_v20_id: '',
+  agent_drift_id: '',
+  run_case_ref: '',
+  order_ref: '',
+  receipt_url: '',
+  receipt_path: '',
+  checkout_cart_id: '',
+  checkout_request_id: '',
   base_url: 'https://api-m.sandbox.paypal.com',
   client_id: '',
   client_secret: '',
@@ -772,6 +928,8 @@ const collection = {
     { name: 'Phase 0: PayPal sandbox probes', description: 'Direct PayPal sandbox calls (bearer {{access_token}}).', group: folders },
     { name: 'Phase 1: Authorization', description: 'Mandates, operators, agents, liability agreement. Needs DATABASE_URL, RECOURSE_SIGNING_KEY and the AI_* settings.', group: phase1 },
     { name: 'Phase 2: Merchant and evidence', description: 'Stride & Co cart, catalog snapshots, flight recorder. Run npm run migrate and npm run seed first.', group: phase2 },
+    { name: 'Phase 3: Agent and checkout', description: 'Agent runs, deterministic firewall, anchored PayPal checkout. Run npm run seed:agents first.', group: phase3 },
+    { name: 'Phase 3b: Ratification receipt', description: 'Receipt page, signed confirmation, issue reports.', group: phase3b },
   ].map((phase) => ({
     name: phase.name,
     description: phase.description,
@@ -782,6 +940,6 @@ const collection = {
 
 mkdirSync('postman', { recursive: true });
 writeFileSync('postman/recourse.postman_collection.json', json(collection) + '\n');
-const all = [...folders, ...phase1, ...phase2];
+const all = [...folders, ...phase1, ...phase2, ...phase3, ...phase3b];
 const count = all.reduce((n, f) => n + f.items.length, 0);
-console.log(`Wrote postman/recourse.postman_collection.json (3 phases, ${all.length} folders, ${count} requests)`);
+console.log(`Wrote postman/recourse.postman_collection.json (5 phase folders, ${all.length} folders, ${count} requests)`);

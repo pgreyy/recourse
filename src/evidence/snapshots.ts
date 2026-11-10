@@ -9,7 +9,7 @@ import { db } from '../shared/db/pool';
  * stored once (catalog_snapshots.sha256 is unique).
  */
 export type Snapshot = {
-  merchant: { id: string; name: string };
+  merchant: { id: string; name: string; delivery_days: number | null };
   catalog_version: string;
   currency: string;
   listings: Array<{
@@ -29,8 +29,8 @@ export type Snapshot = {
 };
 
 export async function buildSnapshot(merchantId: string, c: pg.Pool | pg.PoolClient = db()): Promise<Snapshot> {
-  const m = await c.query<{ id: string; name: string; currency: string; catalog_version: string }>(
-    'SELECT id, name, currency, catalog_version FROM merchants WHERE id = $1',
+  const m = await c.query<{ id: string; name: string; currency: string; catalog_version: string; delivery_days: number | null }>(
+    'SELECT id, name, currency, catalog_version, delivery_days FROM merchants WHERE id = $1',
     [merchantId],
   );
   if (!m.rows[0]) throw new Error(`merchant ${merchantId} is not seeded`);
@@ -41,7 +41,7 @@ export async function buildSnapshot(merchantId: string, c: pg.Pool | pg.PoolClie
     [merchantId],
   );
   return {
-    merchant: { id: m.rows[0].id, name: m.rows[0].name },
+    merchant: { id: m.rows[0].id, name: m.rows[0].name, delivery_days: m.rows[0].delivery_days },
     catalog_version: m.rows[0].catalog_version,
     currency: m.rows[0].currency.trim(),
     listings: listings.rows.map((l) => ({

@@ -6,8 +6,10 @@ wrong Recourse works out who is responsible and settles it on PayPal, within lim
 operator agreed to in advance.
 
 Status: Phase 0 (PayPal sandbox probes, results in [docs/phase0-findings.md](docs/phase0-findings.md)),
-Phase 1 (authorization: signed mandates, operators, agents, liability agreements) and Phase 2
-(merchant and evidence: Store Sync style cart, catalog snapshots, flight recorder).
+Phase 1 (authorization: signed mandates, operators, agents, liability agreements), Phase 2
+(merchant and evidence: Store Sync style cart, catalog snapshots, flight recorder), Phase 3 (agent
+runs, deterministic checkout firewall, PayPal checkout anchored to the recorder) and Phase 3b
+(ratification receipt).
 
 ## Setup
 
@@ -28,14 +30,17 @@ API key for one LLM provider (Gemini, OpenAI or Anthropic).
 3. Signing key: `npm run keygen -- --append` writes `RECOURSE_SIGNING_KEY` into `.env`
    (`npm run keygen` alone prints the line instead). It signs mandates; keep it secret.
 4. Database: `npm run migrate` (creates the tables), then `npm run seed` (loads the Stride & Co
-   catalog from `data/catalog.json`; rerun it to reset stock).
+   catalog from `data/catalog.json`; rerun it to reset stock), then `npm run seed:agents` (the two
+   demo agent versions).
 5. Run the API: `npm run dev` (http://localhost:3000; `APP_PORT` changes it).
-6. Check types: `npm run typecheck`
+6. Webhooks (optional): expose port 3000 over https (any tunnel) and run
+   `npm run webhook:register -- https://<public host>`; set the printed `WEBHOOK_ID` in `.env`.
+7. Check types: `npm run typecheck`
 
 Then import `postman/recourse.postman_collection.json` into Postman and follow
 [docs/phase1-2-checks.md](docs/phase1-2-checks.md).
 
-## API (Phases 1 and 2)
+## API (Phases 1 to 3b)
 
 One Express app, organised as modules: `authorization`, `transaction`, `evidence`, `accountability`,
 `settlement`, plus `paypal` (the one PayPal adapter, shared with the probes) and `shared`.
@@ -54,7 +59,12 @@ One Express app, organised as modules: `authorization`, `transaction`, `evidence
 | `POST /operators/:id/approve` | Operator's PayPal vault link, only after an agreement is accepted; the saved method is linked to it |
 | `GET /operators/:id/exposure` | Caps, used and remaining |
 | `POST /merchant-cart`, `PUT /merchant-cart/:id`, `GET /merchant-cart/:id` | Stride & Co cart shaped like PayPal Store Sync's Cart API; each response carries a catalog snapshot |
-| `POST /merchant-cart/:id/checkout` | 501 until Phase 3 |
+| `POST /merchant-cart/:id/checkout` | `{ mandate_id, request_id? }`: firewall, then PayPal (saved method, payer not present) with the recorder head hash in the order description; idempotent on `request_id`; 422 `STEP_UP_REQUIRED` on a mandate violation |
+| `GET /step-ups/:id/return` | Buyer approved a blocked purchase at PayPal: capture and finish |
+| `GET /orders/:ref` | An order with its PayPal ids and anchor check |
+| `POST /agent/run`, `GET /agent/runs/:id`, `GET /agent/versions` | Run an agent version under a mandate (tool loop: search, cart, checkout; every step recorded). `dry_run: true` stops before PayPal; agents without an accepted operator liability agreement always get `STEP_UP_REQUIRED` |
+| `GET /r/:token`, `POST /r/:token/confirm`, `POST /r/:token/report` | Ratification receipt page (signed link): confirm (signed acknowledgement) or report an issue (opens a case) |
+| `POST /webhooks/paypal` | PayPal webhooks: signature verified, deduped by event id, disputes re-read |
 | `GET /catalog-snapshots/:id` | A stored catalog snapshot, re-hashed |
 | `POST /recorder/:case_ref/entries`, `GET /recorder/:case_ref`, `GET /recorder/:case_ref/verify` | Flight recorder: hash chain with signed checkpoints |
 | `GET /.well-known/recourse-signing-key` | Public key for mandates, agreement acceptances and checkpoints |

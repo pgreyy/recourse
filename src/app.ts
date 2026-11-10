@@ -1,11 +1,15 @@
 import express from 'express';
+import { receipts } from './accountability/receipts.routes';
 import { agents } from './authorization/agents.routes';
 import { mandates } from './authorization/mandates.routes';
 import { operators } from './authorization/operators.routes';
 import { recorder, snapshots } from './evidence/recorder.routes';
 import { loadSigner } from './shared/crypto/signing';
 import { errorHandler, route } from './shared/http/errors';
+import { paypalWebhooks } from './paypal/webhooks.routes';
+import { agentRoutes } from './transaction/agent/routes';
 import { merchantCart } from './transaction/cart.routes';
+import { checkoutRoutes } from './transaction/checkout.routes';
 
 /**
  * One app, organised as modules:
@@ -19,7 +23,10 @@ import { merchantCart } from './transaction/cart.routes';
 export function createApp() {
   const app = express();
   app.disable('x-powered-by');
+  // Webhooks take the raw body (signature verification), so they mount before the JSON parser.
+  app.use('/webhooks/paypal', paypalWebhooks);
   app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: false, limit: '64kb' })); // receipt page forms
 
   app.get('/health', (_req, res) => {
     res.json({ ok: true });
@@ -39,7 +46,11 @@ export function createApp() {
   app.use('/operators', operators);
   app.use('/agents', agents);
   // transaction
+  app.use(checkoutRoutes); // /merchant-cart/:id/checkout, /step-ups/:id/*, /orders/:ref
   app.use('/merchant-cart', merchantCart);
+  app.use('/agent', agentRoutes);
+  // accountability
+  app.use('/r', receipts);
   // evidence
   app.use('/recorder', recorder);
   app.use('/catalog-snapshots', snapshots);

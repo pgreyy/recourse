@@ -10,7 +10,9 @@
     "keygen": "tsx scripts/gen-signing-key.ts",
     "typecheck": "tsc",
     "webhook": "tsx scripts/probes/05-webhook-server.ts",
-    "postman": "tsx scripts/postman/build.ts"
+    "postman": "tsx scripts/postman/build.ts",
+    "seed:agents": "tsx src/transaction/agent/seed-agents.ts",
+    "webhook:register": "tsx src/paypal/register-webhook.ts"
   },
   "license": "MIT",
   "dependencies": {

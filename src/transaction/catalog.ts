@@ -20,7 +20,7 @@ const Variant = z.object({
 });
 const CatalogFile = z.object({
   catalog_version: z.string().min(1),
-  merchant: z.object({ id: z.string(), name: z.string(), currency: z.string().length(3) }),
+  merchant: z.object({ id: z.string(), name: z.string(), currency: z.string().length(3), delivery_days: z.number().int().min(0) }),
   listings: z.array(
     z.object({
       id: z.string(),
