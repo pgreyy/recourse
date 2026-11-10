@@ -97,7 +97,7 @@ export type Alternative = { variant_id: string; listing_id: string; name: string
 
 /**
  * Counterfactual (source: "code"): from the frozen snapshot used at the decision step, every in-stock
- * variant that passes every mandate clause with no warning. If one exists, a compliant alternative existed.
+ * variant that passes every clause of the instructions with no warning. If one exists, a compliant alternative existed.
  */
 export function counterfactual(m: CaseMaterial): { source: 'code'; snapshot_sha256: string | null; compliant_alternatives: Alternative[]; note: string } {
   if (!m.snapshot) return { source: 'code', snapshot_sha256: null, compliant_alternatives: [], note: 'no decision snapshot available' };

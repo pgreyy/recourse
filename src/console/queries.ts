@@ -162,7 +162,7 @@ export async function recoveredByAgentVersion(days: number | null) {
   }));
 }
 
-/** The case's signed mandate (re-checked now) and its recorder entries. */
+/** The case's signed instructions (re-checked now) and its recorder entries. */
 export async function caseContext(caseId: string) {
   const c = (
     await db().query(
@@ -171,7 +171,7 @@ export async function caseContext(caseId: string) {
     )
   ).rows[0];
   const o = c?.order_id ? c : null;
-  // Mandate, recorder entries, checkpoints and receipt are independent: read them in parallel.
+  // Instructions, recorder entries, checkpoints and receipt are independent: read them in parallel.
   const [mq, entries, checkpoints, receipt] = await Promise.all([
     o
       ? db().query(
@@ -294,7 +294,7 @@ export async function runView(runId: string) {
 
 /**
  * Re-read the PayPal order now and check that it carries this decision trail: the description holds
- * the recorder head hash at the anchor step, custom_id is the mandate hash, invoice_id the order ref,
+ * the recorder head hash at the anchor step, custom_id is the instructions hash, invoice_id the order ref,
  * and the chain still verifies up to that step.
  */
 async function anchorCheck(order: any, entries: RecorderEntry[]) {

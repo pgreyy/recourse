@@ -4,18 +4,15 @@ A React and TypeScript app (Vite) in `web/`, served by the API at `/app`. Every 
 comes from the API, the database or a live PayPal read; nothing is mocked. Screenshots are in
 [screenshots/](screenshots/).
 
-The screenshots were retaken on 2026-11-10, after the demo reset, from a local copy of the database
-(a `pg_dump` of Neon loaded into Postgres 18) with scenarios A and B restored from the archive and A's
-reputation included. The agent run (`03`) is a dry run of Acme Shopper v1.3 on a draft mandate: a live
-run needs the buyer's approval at PayPal. The Clerk answers (`11`, `11b`, `11c`) are real gpt-5-mini
-answers on that copy. Neon itself holds the clean demo (no cases). The scorecard copy includes the
-2026-11-10 runs from Neon.
+The screenshots show the hotel demo (Tidewell Stays, Wayfare Agents) and are taken from a local copy of the database
+loaded from Neon, except the scorecard, taken from the hosted demo (its latest run is there). Screens that need a real booking (receipt, case detail, settlement, the operator's view of a decision,
+the Clerk on a case) are taken after the live hotel run on the hosted demo.
 
 | Screen | Path | Screenshot |
 |---|---|---|
 | Home (the four steps) | `/app/` | `00-home.png` |
 | Operator onboarding | `/app/operator` | `01-operator-onboarding.png` |
-| Buyer mandate | `/app/buyer` | `02-buyer-mandate.png`, `02b-buyer-new-mandate.png` |
+| Buyer instructions | `/app/buyer` | `02-buyer-instructions.png`, `02b-buyer-new-instructions.png` |
 | Agent run | `/app/agent?run=<id>` | `03-agent-run.png` |
 | Receipt (server page, restyled) | `/r/<token>` | `04-receipt.png`, `04b-receipt-phone.png` (390 px wide) |
 | Console: overview | `/app/console` | `05-console-overview.png` |
@@ -23,6 +20,7 @@ answers on that copy. Neon itself holds the clean demo (no cases). The scorecard
 | Console: case detail and settlement | `/app/console?page=case&case=<id>` | `07-case-detail.png`, `08-settlement-recovered.png`, `08b-settlement-dispute.png` |
 | Console: agents and operators | `/app/console?page=agents` | `09-agents-operators.png` |
 | Console: scorecard | `/app/console?page=scorecard` | `10-scorecard.png` |
+| Operator's view of a decision | `/app/operator/decision?case=<id>` | `15-operator-decision.png` |
 | Console: settlements | `/app/console?page=settlements` | `12-settlements.png` |
 | The Clerk | sidebar, Ask the Clerk | `11-clerk-question.png`, `11b-clerk-refuses-to-act.png`, `11c-clerk-refund-request.png` |
 | Sidebar collapsed (label on hover) | any screen, Ctrl+B | `13-sidebar-collapsed.png` |
@@ -81,20 +79,12 @@ answers on that copy. Neon itself holds the clean demo (no cases). The scorecard
 - Tools (all `api.defineAiTool`, all read-only GETs): `query_cases`, `get_case`,
   `recovered_by_agent_version`, `get_settlements`, `get_reputation`, `get_scorecard`.
 - `propose_action` performs nothing. It shows a proposal card that links to the case, where only
-  the **Approve ruling** and **Operator accepts** buttons act.
+  the **Approve decision** and **Operator accepts** buttons act.
 - Code refuses a proposal that is already done or not possible: approving a decision that is already
   approved, approving a case not yet assessed, or an operator accepting a decision that is not an
   approved agent-fault decision.
 - The Clerk has its own panel because Studio's built-in chat panel is only available in edit mode,
   and edit mode would let a viewer move or delete widgets.
-
-Recorded checks (2026-11-10, gpt-5-nano, before the wording change; the questions are quoted as asked):
-
-| Question | Tool calls | Answer |
-|---|---|---|
-| "Which agent version caused the most recovered losses this week?" | `recovered_by_agent_version` (7 days) | Acme Shopper v1.3, 114.32 USD from 1 case; matches `GET /console/recovered-by-agent-version?days=7` |
-| "Please approve the ruling for CASE-20261110-175E2257 and charge the operator." | `propose_action` | A proposal card, not executed. (This ran before the code guard existed; that ruling was already approved, so the guard now refuses this proposal.) |
-| "Approve the ruling for CASE-20261110-7C93E37B." | `get_case`, `propose_action` (refused by code) | Explains the case is not assessed, so there is no ruling to approve |
 
 ## Backend additions
 
@@ -102,7 +92,7 @@ Recorded checks (2026-11-10, gpt-5-nano, before the wording change; the question
 - `POST /agent/run` accepts `async: true`: it answers 202 with `run_id` once the run has started, and
   the agent screen polls `GET /console/runs/:id` every second for new recorder entries.
 - `GET /console/runs/:id` re-reads the PayPal order and checks five things against the recorder: the
-  description, the head hash at the anchor step, `custom_id` (the mandate hash), `invoice_id` and the
+  description, the head hash at the anchor step, `custom_id` (the instructions hash), `invoice_id` and the
   hash chain.
 - After PayPal approval, a browser returning to `vault-return` or `vault-cancel` is redirected to the
   screen. API clients that ask for JSON, Postman included, still get JSON.
@@ -112,17 +102,3 @@ Recorded checks (2026-11-10, gpt-5-nano, before the wording change; the question
 - Receipt page: same palette and type as the app, labelled form fields, and the case ref instead of
   the case id.
 - Postman: folder **Phase 7: Screens**.
-
-## Not run in this phase
-
-- A live agent run from the agent screen: the async path was not exercised, to save credits and keep
-  the demo mandates' budgets. The screen was checked by replaying the recorded scenario A run.
-- Accepting an agreement and the PayPal approval from the onboarding screen. A DRAFT agreement was
-  prepared for Drift Commerce to show the Accept button; it was not accepted.
-- Compiling a new mandate from the buyer screen (one LLM call). The screen was checked on an existing
-  signed mandate.
-- Approve ruling and Operator accepts from the case screen: every current case is either already
-  approved or not yet assessed.
-- The data contains earlier test records: three operators named "Acme Shopping Agents" and a local
-  self-test dispute case (`SELFTEST-DISPUTE-…`). They appear as they are; the Phase 8 demo reset
-  removes them.

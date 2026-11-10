@@ -1,7 +1,7 @@
 // npm run demo:restore -- A|B [--with-reputation] [--check] [--neon]
 // Puts an archived scenario back into the live tables, with its original ids, so the console shows it
 // again (for example if a live rerun fails during judging). Adds rows only; anything already there is kept.
-// --check restores inside a transaction, verifies the hash chain, the checkpoint and mandate signatures,
+// --check restores inside a transaction, verifies the hash chain, the checkpoint and instruction signatures,
 // then rolls everything back: nothing is left in the database.
 import '../config';
 import type pg from 'pg';

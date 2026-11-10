@@ -6,7 +6,7 @@ Postman collection.
 ## Setup
 
 Node 20 or later, a Postgres database (Neon works), a PayPal sandbox REST app on a **US** business
-account (see [docs/phase0-findings.md](phase0-findings.md) for why the country matters), and an
+account (a sandbox business account registered outside the US failed every Vault and Orders call), and an
 API key for one LLM provider (Gemini, OpenAI or Anthropic).
 
 1. Install: `npm install`
@@ -20,10 +20,10 @@ API key for one LLM provider (Gemini, OpenAI or Anthropic).
      A model that is overloaded, times out or returns a 5xx (after one retry) hands over to the next;
      the server log names the model that answered.
 3. Signing key: `npm run keygen -- --append` writes `RECOURSE_SIGNING_KEY` into `.env`
-   (`npm run keygen` alone prints the line instead). It signs mandates; keep it secret.
-4. Database: `npm run migrate` (creates the tables), then `npm run seed` (loads the Stride & Co
-   catalog from `data/catalog.json`; rerun it to reset stock), then `npm run seed:agents` (the two
-   demo agent versions).
+   (`npm run keygen` alone prints the line instead). It signs buyer instructions; keep it secret.
+4. Database: `npm run migrate` (creates the tables), then `npm run seed` (loads the demo catalogs;
+   rerun it to reset availability), then `npm run seed:agents` (Wayfare Booker v1.3 and v2.0, Drift
+   Booker v1.0, and a draft liability agreement for Wayfare Agents to accept on the operator screen).
 5. Run the API: `npm run dev` (http://localhost:3000; `APP_PORT` changes it).
 6. Webhooks (optional): expose port 3000 over https (any tunnel) and run
    `npm run webhook:register -- https://<public host>`; set the printed `WEBHOOK_ID` in `.env`.
@@ -33,8 +33,7 @@ API key for one LLM provider (Gemini, OpenAI or Anthropic).
    calls proxied to port 3000). `AG_STUDIO_LICENSE_KEY` in `.env` is optional; without it AG Studio
    runs in trial mode with a watermark.
 
-Then import `postman/recourse.postman_collection.json` into Postman and follow
-[docs/phase1-2-checks.md](phase1-2-checks.md).
+Then import `postman/recourse.postman_collection.json` into Postman.
 
 ## API (Phases 1 to 6)
 
@@ -43,41 +42,41 @@ One Express app, organised as modules: `authorization`, `transaction`, `evidence
 
 | Method and path | What it does |
 |---|---|
-| `POST /mandates` | `{ buyer_email, text }`: the LLM compiles plain English into a strict mandate, saved as `DRAFT`; anything that fails the schema is rejected (422) |
+| `POST /mandates` | `{ buyer_email, text }`: the LLM compiles plain English into strict buyer instructions, saved as `DRAFT`; anything that fails the schema is rejected (422) |
 | `POST /mandates/:id/approve` | PayPal Vault setup token for the buyer; returns `approve_url` |
-| `GET /mandates/:id/vault-return` | PayPal redirects here: stores the vault_id, signs the mandate (Ed25519), sets `ACTIVE` |
-| `GET /mandates/:id` | The mandate version with `signature_valid` computed live and the remaining budget |
-| `PUT /mandates/:id` | `{ text }` or `{ changes }`: creates the next version (signed again if the mandate was ACTIVE) |
-| `POST /mandates/:id/revoke` | Revokes the mandate |
+| `GET /mandates/:id/vault-return` | PayPal redirects here: stores the vault_id, signs the instructions (Ed25519), sets `ACTIVE` |
+| `GET /mandates/:id` | The version of the instructions with `signature_valid` computed live and the remaining budget |
+| `PUT /mandates/:id` | `{ text }` or `{ changes }`: creates the next version (signed again if the instructions were ACTIVE) |
+| `POST /mandates/:id/revoke` | Revokes the instructions |
 | `POST /operators`, `GET /operators/:id` | Agent operator and its onboarding state |
 | `POST /agents`, `POST /agents/:id/versions`, `GET /agents/:id` | Agents and their versions |
 | `POST /operators/:id/liability-agreement`, `GET ...`, `POST .../:version/accept`, `POST .../:version/revoke` | Versioned liability agreement (caps, covered agent versions, fault definition, appeal window); acceptance is signed |
 | `POST /operators/:id/approve` | Operator's PayPal vault link, only after an agreement is accepted; the saved method is linked to it |
 | `GET /operators/:id/exposure` | Caps, used and remaining |
-| `POST /merchant-cart`, `PUT /merchant-cart/:id`, `GET /merchant-cart/:id` | Stride & Co cart shaped like PayPal Store Sync's Cart API; each response carries a catalog snapshot |
-| `POST /merchant-cart/:id/checkout` | `{ mandate_id, request_id? }`: firewall, then PayPal (saved method, payer not present) with the recorder head hash in the order description; idempotent on `request_id`; 422 `STEP_UP_REQUIRED` on a mandate violation |
+| `POST /merchant-cart`, `PUT /merchant-cart/:id`, `GET /merchant-cart/:id` | The demo merchant's cart (`merchant_id`, default the retail one; Tidewell Stays is `tidewell-stays`) shaped like PayPal Store Sync's Cart API; each response carries a catalog snapshot |
+| `POST /merchant-cart/:id/checkout` | `{ mandate_id, request_id? }`: firewall, then PayPal (saved method, payer not present) with the recorder head hash in the order description; idempotent on `request_id`; 422 `STEP_UP_REQUIRED` when the cart breaks the instructions |
 | `GET /step-ups/:id/return` | Buyer approved a blocked purchase at PayPal: capture and finish |
 | `GET /orders/:ref` | An order with its PayPal ids and anchor check |
-| `POST /agent/run`, `GET /agent/runs/:id`, `GET /agent/versions` | Run an agent version under a mandate (tool loop: search, cart, checkout; every step recorded). `dry_run: true` stops before PayPal; agents without an accepted operator liability agreement always get `STEP_UP_REQUIRED` |
-| `GET /r/:token`, `POST /r/:token/confirm`, `POST /r/:token/report` | Ratification receipt page (signed link): confirm (signed acknowledgement) or report an issue (opens a case) |
+| `POST /agent/run`, `GET /agent/runs/:id`, `GET /agent/versions` | Run an agent version under a set of buyer instructions (tool loop: search, cart, checkout; every step recorded). `dry_run: true` stops before PayPal; agents without an accepted operator liability agreement always get `STEP_UP_REQUIRED` |
+| `GET /r/:token`, `POST /r/:token/confirm`, `POST /r/:token/report` | Receipt page (signed link): confirm (signed acknowledgement), request cancellation (`POST /r/:token/cancel`, bookings: refunded by the merchant if the rate is refundable, otherwise refused with the reason) or report an issue (opens a case) |
 | `POST /webhooks/paypal` | PayPal webhooks: signature verified, deduped by event id, disputes re-read; a dispute on one of our orders opens a case |
 | `POST /cases`, `GET /cases`, `GET /cases/:id`, `GET /cases/:id/evidence`, `GET /cases/:id/verify` | Cases (buyer reports and PayPal disputes), their evidence pack and code checks |
 | `POST /cases/:id/assess` | Code checks, counterfactual and injection scan, then one model call, then validation in code |
 | `POST /cases/:id/operator-statement` | Operator text on a case, kept as untrusted evidence and flagged if it reads like instructions |
-| `POST /cases/:id/approve` | Signed ruling from a validated assessment (no money moves) |
-| `POST /rulings/:id/operator-accept`, `POST /rulings/:id/appeal`, `POST /appeals/:id/decide` | Operator accepts a ruling (waives the appeal) or appeals it; a human decides appeals |
-| `GET /settlements`, `GET /settlements/:id`, `POST /settlements/:id/execute`, `POST /settlements/:id/reconcile`, `GET /cases/:id/settlement` | Settlement obligations from approved rulings: checked, executed on PayPal, confirmed by webhook |
+| `POST /cases/:id/approve` | Signed decision from a validated assessment (no money moves) |
+| `POST /rulings/:id/operator-accept`, `POST /rulings/:id/appeal`, `POST /appeals/:id/decide` | Operator accepts a decision (waives the appeal) or appeals it (the note goes through the injection guard); a human decides appeals |
+| `GET /settlements`, `GET /settlements/:id`, `POST /settlements/:id/execute`, `POST /settlements/:id/reconcile`, `GET /cases/:id/settlement` | Settlement obligations from approved decisions: checked, executed on PayPal, confirmed by webhook; each includes `who_paid` once settled |
 | `GET /agents/:id/reputation`, `GET /operators/:id/reputation` | Agent reliability, operator accountability, merchant policy (normal / step-up / suspended) |
-| `POST /scorecard/run`, `GET /scorecard` | 24 labelled fixture cases through the same pipeline; accuracy, false AGENT_FAULT rate, INCONCLUSIVE rate |
+| `POST /scorecard/run`, `GET /scorecard` | An internal, labelled evaluation set (retail and travel cases) through the same pipeline; accuracy, false AGENT_FAULT rate, INCONCLUSIVE rate, per case with its domain |
 | `GET /catalog-snapshots/:id` | A stored catalog snapshot, re-hashed |
 | `POST /recorder/:case_ref/entries`, `GET /recorder/:case_ref`, `GET /recorder/:case_ref/verify` | Flight recorder: hash chain with signed checkpoints |
-| `GET /.well-known/recourse-signing-key` | Public key for mandates, agreement acceptances and checkpoints |
+| `GET /.well-known/recourse-signing-key` | Public key for buyer instructions, agreement acceptances and checkpoints |
 
 Code: `src/<module>/` (API), `migrations/` (plain SQL, applied in name order by `npm run migrate`),
-`data/catalog.json` (demo catalog), `src/transaction/sizes.ts` (US/UK/EU size table).
+`data/catalog-tidewell.json` (the hotel demo catalog), `data/catalog.json` (the retail catalog behind the retail evaluation cases).
 
 Screens (Phase 7) read through `GET /console/overview`, `/console/cases`, `/console/cases/:id`,
-`/console/recovered-by-agent-version`, `/console/agents`, `/console/runs`, `/console/runs/:id` (all
+`/console/recovered-by-agent-version`, `/console/agents`, `/console/runs`, `/console/runs/:id`, `/console/cases/:id/operator-view` (all
 read-only). `POST /agent/run` with `async: true` answers 202 as soon as the run starts. `POST
 /console/clerk/turn` is the Clerk's model turn (model fixed server-side, no tools executed there).
 

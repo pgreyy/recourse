@@ -166,11 +166,11 @@ function systemPrompt(instructions: string, spec: MandateSpec, remaining: string
 
 export type RunOutcome = Awaited<ReturnType<typeof runAgent>>;
 
-/** POST /agent/run: one agent version shops under one mandate; everything goes into the recorder. */
+/** POST /agent/run: one agent version shops under one set of instructions; everything goes into the recorder. */
 export async function runAgent(mandateId: string, agentVersionId: string, opts: { dryRun?: boolean; provider?: 'gemini' | 'openai' | 'anthropic'; onStarted?: (r: { run_id: string; case_ref: string }) => void } = {}) {
   const mandate = await loadMandate(mandateId);
   const dryRun = Boolean(opts.dryRun);
-  // A dry run may rehearse on a DRAFT mandate; a real run needs the buyer's approval (ACTIVE).
+  // A dry run may rehearse on DRAFT instructions; a real run needs the buyer's approval (ACTIVE).
   if (mandate.status !== 'ACTIVE' && !(dryRun && mandate.status === 'DRAFT')) throw new HttpError(409, 'MANDATE_NOT_ACTIVE', `Mandate version ${mandate.version} is ${mandate.status}.`);
   const av = (
     await db().query(

@@ -37,7 +37,7 @@ const defaults: Record<string, unknown> = {
   'send-message': { message: 'Recourse probe message.' },
   escalate: { note: 'Recourse probe: escalating to claim.' },
   'provide-evidence': {
-    evidences: [{ evidence_type: 'ITEM_DESCRIPTION', notes: 'Recourse probe: signed mandate and receipt attached.' }],
+    evidences: [{ evidence_type: 'ITEM_DESCRIPTION', notes: 'Recourse probe: signed instructions and receipt attached.' }],
   },
 };
 

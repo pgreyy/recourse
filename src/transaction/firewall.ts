@@ -4,14 +4,14 @@ import { plural } from '../shared/words';
 import { sameMensSize, type UnitSystem } from './sizes';
 
 /**
- * The checkout firewall: deterministic code, no LLM. It compares a cart against the signed mandate
- * and the mandate's history before any money moves.
+ * The checkout firewall: deterministic code, no LLM. It compares a cart against the signed instructions
+ * and the instructions' history before any money moves.
  *
- *   VIOLATION     a mandate clause is broken, or the agent is not covered by an operator liability
+ *   VIOLATION     a clause of the instructions is broken, or the agent is not covered by an operator liability
  *                 agreement: checkout is blocked (STEP_UP_REQUIRED)
  *   UNVERIFIABLE  the merchant's data can't show compliance (e.g. a size with no unit_system):
  *                 checkout continues with a recorded warning, because real catalogs often lack units
- *   WARNING       allowed but worth flagging (e.g. fewer units than the mandate asked for)
+ *   WARNING       allowed but worth flagging (e.g. fewer units than the instructions asked for)
  *   PASS
  */
 export type CheckStatus = 'PASS' | 'WARNING' | 'UNVERIFIABLE' | 'VIOLATION';
@@ -124,7 +124,7 @@ export function runFirewall(input: FirewallInput): FirewallResult {
     checks.push({ rule: 'operator.coverage', status: 'PASS', detail: 'no agent: buyer-initiated checkout' });
   }
 
-  // mandate state and time
+  // state of the instructions and time
   add('mandate.status', input.mandate_status === 'ACTIVE', 'the instructions are ACTIVE', `the instructions are ${input.mandate_status}`);
   add('mandate.expiry', now < input.expires_at, `instructions valid until ${input.expires_at.toISOString()}`, `instructions expired at ${input.expires_at.toISOString()}`);
   if (spec.stay) {

@@ -77,7 +77,7 @@ export type CaseRow = {
   updated_at: Date;
 };
 
-/** Load a live case: order, signed mandate, PayPal's copy of the order (re-read now), recorder, snapshot, receipt, statements. */
+/** Load a live case: order, signed instructions, PayPal's copy of the order (re-read now), recorder, snapshot, receipt, statements. */
 export async function loadCaseMaterial(c: CaseRow): Promise<CaseMaterial> {
   const o = (await db().query('SELECT * FROM orders WHERE id = $1', [c.order_id])).rows[0];
   if (!o) throw new Error(`case ${c.id} has no order`);

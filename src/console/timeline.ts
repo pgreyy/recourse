@@ -39,7 +39,7 @@ export const isKnownVariant = (id: string) => catalog().has(id);
 function productName(variantId: string): string {
   const known = catalog().get(variantId)?.name;
   if (known) return known;
-  // Unknown variant: turn "kestrel-glide-4-us-10" into "Kestrel Glide 4".
+  // Unknown variant: turn "trail-runner-us-10" into "Trail Runner" (a trailing size is dropped).
   const words = variantId.split('-').filter((w, i, a) => !(i >= a.length - 2 && /^(us|uk|eu|\d+(\.\d+)?)$/i.test(w)));
   return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
@@ -50,7 +50,7 @@ function sizeWords(a?: Attrs): string {
   return a.unit_system ? `${a.unit_system} ${a.size}` : `size ${a.size} (no size system given)`;
 }
 
-/** "Kestrel Glide 4, US 10" */
+/** "Casa Lumen, Flexible Saver (no refund policy given)" */
 export function itemWords(variantId: string, attrs?: Attrs): string {
   const a = attrs ?? catalog().get(variantId)?.attrs;
   const size = sizeWords(a);
@@ -188,7 +188,7 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
         break;
       }
       case 'checkout.dry_run': {
-        // A rehearsal on a draft mandate: the draft status is expected, so it is reported apart from the real findings.
+        // A rehearsal on draft instructions: the draft status is expected, so it is reported apart from the real findings.
         const all = (p.checks ?? []) as Array<{ rule: string; status: string; detail: string }>;
         const draft = all.some((c) => c.rule === 'mandate.status' && /DRAFT/.test(c.detail));
         const checks = all.filter((c) => !(c.rule === 'mandate.status' && /DRAFT/.test(c.detail)));

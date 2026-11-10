@@ -37,7 +37,7 @@ export async function openBuyerCase(orderRef: string, description: string) {
 
 /**
  * Workflow B: a PayPal dispute (already re-read from PayPal, not taken from the webhook body) is matched
- * to our order through custom_id (the mandate hash), invoice_id (our order ref) or the capture id, and
+ * to our order through custom_id (the instructions hash), invoice_id (our order ref) or the capture id, and
  * opens a case (source PAYPAL_DISPUTE). Idempotent per dispute id.
  */
 export async function openCaseFromDispute(dispute: any): Promise<CaseRow | null> {

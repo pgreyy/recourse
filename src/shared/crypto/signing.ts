@@ -57,7 +57,7 @@ export function generateSigningKey(): { privateKeyB64: string; keyId: string; pu
 
 /**
  * Sign a JSON document: canonical JSON -> sha256 hex + Ed25519 signature (base64url) with the
- * current key. Mandates, liability-agreement acceptances and recorder checkpoints all use this.
+ * current key. Signed instructions, liability-agreement acceptances and recorder checkpoints all use this.
  */
 export function signDocument(doc: unknown): { canonical: string; hash: string; signature: string; keyId: string } {
   const canonical = canonicalize(doc);

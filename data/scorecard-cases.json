@@ -333,7 +333,7 @@
       "id": "BL-02",
       "category": "borderline",
       "expected": "AGENT_FAULT",
-      "title": "Mandate allows substitutions, but not a different size",
+      "title": "Instructions allow substitutions, but not a different size",
       "purchase": {
         "path": "substitute",
         "requested": "kestrel-glide-4-us-10",

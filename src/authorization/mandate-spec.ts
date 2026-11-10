@@ -68,7 +68,7 @@ const Money = z.object({
 const isoDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && new Date(`${d}T00:00:00Z`).toISOString().startsWith(d);
 
 /**
- * The stored, signed mandate. Applies defaults (max_orders 1, no substitutions, no split orders,
+ * The stored, signed instructions. Applies defaults (max_orders 1, no substitutions, no split orders,
  * expires_at = end of the deadline day UTC), normalizes case and money, then enforces the rules.
  * Anything that fails is rejected; nothing is guessed.
  */

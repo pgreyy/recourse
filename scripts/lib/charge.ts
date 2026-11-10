@@ -17,7 +17,7 @@ export type ChargeInput = {
  * not already completed, then GET it and check that custom_id came back.
  */
 export async function chargeVault(input: ChargeInput): Promise<void> {
-  // Stand-in for the signed mandate the agent will carry in Phase 1. Its sha256 is the custom_id.
+  // Stand-in for the signed instructions the agent will carry in Phase 1. Its sha256 is the custom_id.
   const mandate = {
     kind: 'recourse.test-mandate',
     created: new Date().toISOString(),

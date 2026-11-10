@@ -213,7 +213,7 @@ export function computeCart(requested: RequestedItem[], variants: Map<string, Va
     issues.push(issue);
   });
 
-  // The demo merchant charges no shipping or tax, so total = subtotal (mandate budgets include both).
+  // The demo merchant charges no shipping or tax, so total = subtotal (budgets in the instructions include both).
   const money = (cents: number): Money => ({ currency_code: currency, value: (cents / 100).toFixed(2) });
   const ready = issues.length === 0;
   return {

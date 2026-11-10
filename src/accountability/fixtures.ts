@@ -13,7 +13,7 @@ import { runFirewall, type FirewallLine } from '../transaction/firewall';
 import type { CaseMaterial, StoredLine } from './material';
 
 /**
- * Scorecard fixtures: labelled cases built in memory as complete, signed case material (signed mandate,
+ * Scorecard fixtures: labelled cases built in memory as complete, signed case material (signed instructions,
  * hash-chained recorder with signed checkpoints, hashed catalog snapshot, PayPal order mirror carrying the
  * anchor). Then optional tampering. They go through the same pipeline as live cases.
  */
@@ -129,7 +129,7 @@ export function buildFixtureMaterial(f: Fixture, now = new Date()): CaseMaterial
     throw new Error(`fixture ${f.id}: unknown variant ${id}`);
   };
 
-  // Signed mandate
+  // Signed instructions
   const mandate: CaseMaterial['mandate'] = {
     id: randomUUID(),
     lineage_id: randomUUID(),

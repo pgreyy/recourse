@@ -2,7 +2,7 @@
 //   npm run keygen              prints the RECOURSE_SIGNING_KEY=... line to paste into .env
 //   npm run keygen -- --append  writes it into .env instead (only if no key is set) and prints only the key id
 // The private key is a secret: don't paste it into chat, tickets or commits.
-// Changing the key later makes every mandate signed with the old key show signature_valid=false.
+// Changing the key later makes every set of instructions signed with the old key show signature_valid=false.
 import 'dotenv/config';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

@@ -11,7 +11,7 @@ export const agentRoutes = Router();
 const RunBody = z.object({
   mandate_id: z.string().uuid(),
   agent_version_id: z.string().uuid(),
-  /** Shop and preview checkout without anchoring or charging. Works on a DRAFT mandate too. */
+  /** Shop and preview checkout without anchoring or charging. Works on DRAFT instructions too. */
   dry_run: z.boolean().optional(),
   /** Pin the run to one provider in the model chain (e.g. to rehearse on OpenAI). */
   provider: z.enum(['gemini', 'openai', 'anthropic']).optional(),
@@ -29,7 +29,7 @@ agentRoutes.post(
     let started!: (r: { run_id: string; case_ref: string }) => void;
     const startedP = new Promise<{ run_id: string; case_ref: string }>((resolve) => (started = resolve));
     const done = runAgent(body.mandate_id, body.agent_version_id, { dryRun: body.dry_run, provider: body.provider, onStarted: started });
-    // Errors before the run starts (mandate not active, unknown agent) answer this request; later ones are in the recorder.
+    // Errors before the run starts (instructions not active, unknown agent) answer this request; later ones are in the recorder.
     done.catch((e) => console.log(`[agent] async run failed: ${(e as Error).message}`));
     const r = await Promise.race([startedP, done.then(() => null)]);
     if (!r) return res.json(await done);

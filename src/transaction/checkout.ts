@@ -148,7 +148,7 @@ async function receiptFor(orderId: string): Promise<string | null> {
 
 /**
  * The firewall evaluation shared by checkout and dry runs: current cart (with a fresh catalog snapshot),
- * mandate, purchase history, the agent's liability coverage, then runFirewall. The result is recorded
+ * instructions, purchase history, the agent's liability coverage, then runFirewall. The result is recorded
  * as checkout.firewall (or checkout.dry_run) and its entry returned so later entries can cite its seq.
  */
 async function evaluate(req: { cartId: string; mandateId: string; requestId: string; agentVersionId?: string | null }, dryRun: boolean) {
@@ -213,7 +213,7 @@ export async function previewCheckout(req: { cartId: string; mandateId: string; 
 export type CheckoutRequest = { cartId: string; mandateId: string; requestId: string; agentVersionId?: string | null };
 
 /**
- * Checkout: firewall, anchor, PayPal (payer not present, the mandate's saved PayPal), verify, track,
+ * Checkout: firewall, anchor, PayPal (payer not present, the instructions' saved PayPal), verify, track,
  * receipt. Idempotent on requestId: a repeat returns the first result and never charges again.
  */
 export async function checkout(req: CheckoutRequest): Promise<CheckoutResult> {

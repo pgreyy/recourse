@@ -32,7 +32,7 @@ const SELECT = `SELECT m.*, b.email AS buyer_email, pt.vault_id
                 FROM mandates m JOIN buyers b ON b.id = m.buyer_id
                 LEFT JOIN payment_tokens pt ON pt.id = m.payment_token_id`;
 
-/** Load one version; an ACTIVE mandate past expires_at becomes EXPIRED on read. */
+/** Load one version; ACTIVE instructions past expires_at becomes EXPIRED on read. */
 export async function loadMandate(id: string, c: pg.Pool | pg.PoolClient = db()): Promise<Row> {
   return load(id, c);
 }
@@ -154,7 +154,7 @@ mandates.get(
   }),
 );
 
-/** POST /mandates/:id/approve: buyer saves PayPal for this mandate; returns the approve link. */
+/** POST /mandates/:id/approve: buyer saves PayPal for these instructions; returns the approve link. */
 mandates.post(
   '/:id/approve',
   route(async (req, res) => {
@@ -188,7 +188,7 @@ mandates.post(
   }),
 );
 
-/** PayPal redirects here after approval: vault_id stored, mandate signed, ACTIVE. */
+/** PayPal redirects here after approval: vault_id stored, instructions signed, ACTIVE. */
 mandates.get(
   '/:id/vault-return',
   route(async (req, res) => {
@@ -244,7 +244,7 @@ const EditMandate = z
   .refine((b) => (b.text ? 1 : 0) + (b.changes ? 1 : 0) === 1, 'send either text (recompiled by the LLM) or changes (fields to replace), not both');
 
 /**
- * PUT /mandates/:id { text } or { changes }: every edit creates a new version. An ACTIVE mandate's
+ * PUT /mandates/:id { text } or { changes }: every edit creates a new version. For ACTIVE instructions, the
  * new version is signed at once (same saved PayPal, previous_mandate_hash links the versions);
  * a DRAFT's new version stays DRAFT. The old version becomes SUPERSEDED.
  */
@@ -304,7 +304,7 @@ mandates.put(
   }),
 );
 
-/** POST /mandates/:id/revoke: the buyer withdraws the mandate; its saved payment method stops being usable. */
+/** POST /mandates/:id/revoke: the buyer withdraws the instructions; its saved payment method stops being usable. */
 mandates.post(
   '/:id/revoke',
   route(async (req, res) => {

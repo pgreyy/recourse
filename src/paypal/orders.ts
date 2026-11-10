@@ -59,7 +59,7 @@ export function captureOrder(id: string, requestId?: string): Promise<PPResponse
 
 /**
  * Order the buyer approves in the browser (payer present), used for step-up: a purchase outside the
- * mandate goes ahead only if the buyer approves this exact payment at PayPal.
+ * instructions goes ahead only if the buyer approves this exact payment at PayPal.
  */
 export function createBuyerApprovalOrder(
   input: Omit<VaultOrderInput, 'vaultId' | 'source'> & { returnUrl: string; cancelUrl: string },

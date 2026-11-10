@@ -13,7 +13,7 @@ export type Validation = { passed: boolean; problems: string[]; counterfactual_s
  *  - every cited recorder seq and every violated clause id must exist, and a clause the code verified as
  *    PASS can't be named as violated
  *  - AGENT_FAULT needs a violated clause and either a code counterfactual (a compliant alternative
- *    existed) or a firewall VIOLATION (the agent acted outside the mandate)
+ *    existed) or a firewall VIOLATION (the agent acted outside the instructions)
  *  - BUYER_REMORSE and MERCHANT_FAULT can't name violated agent clauses
  *  - a non-INCONCLUSIVE verdict must cite at least one recorder entry
  * The counterfactual attached to the result is always the code's, never the model's.

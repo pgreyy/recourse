@@ -19,7 +19,7 @@ consoleRoutes.get('/overview', route(async (_req, res) => res.json(await overvie
 consoleRoutes.get('/cases', route(async (_req, res) => res.json(await caseRows())));
 
 /**
- * Everything the case screen shows: the case, its evidence and checks, mandate, timeline, settlement.
+ * Everything the case screen shows: the case, its evidence and checks, instructions, timeline, settlement.
  * The PayPal part (order, capture, dispute) is read live once and cached with its time; the cache is
  * reused until "Re-verify now" (POST /console/cases/:id/verify) or until the case's recorder has new
  * entries, so the screen opens at database speed.
@@ -158,7 +158,7 @@ consoleRoutes.get(
   }),
 );
 
-/** Mandates a buyer has approved (ACTIVE), for the agent screen. */
+/** Signed instructions a buyer has approved (ACTIVE), for the agent screen. */
 consoleRoutes.get(
   '/mandates',
   route(async (_req, res) => {

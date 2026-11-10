@@ -4,7 +4,7 @@ import { db } from '../shared/db/pool';
 export type MandateUsage = { spent_cents: number; orders_placed: number; units_bought: number };
 
 /**
- * What has been bought under a mandate lineage (all versions): captured orders only. The aggregate
+ * What has been bought under one lineage of instructions (all versions): captured orders only. The aggregate
  * budget, max_orders and quantity rules are all checked against this.
  */
 export async function mandateUsage(lineageId: string, c: pg.Pool | pg.PoolClient = db()): Promise<MandateUsage> {

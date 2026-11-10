@@ -3,7 +3,7 @@ import { checkDocument, signDocument, type DocumentCheck } from '../shared/crypt
 export const BUDGET_RULE =
   'max_total is the most that may be spent under this mandate across all of its orders together, including tax and shipping.';
 
-/** The mandate columns that go into the signed document. */
+/** The instructions columns that go into the signed document. */
 export type MandateRow = {
   id: string;
   lineage_id: string;

@@ -8,7 +8,7 @@ import { cancelStepUp, checkout, completeStepUp, loadOrderByRef, orderView } fro
 
 /**
  * POST /merchant-cart/:id/checkout { mandate_id, request_id?, agent_version_id? }
- * request_id (or a PayPal-Request-Id header) makes checkout idempotent; it defaults to cart + mandate,
+ * request_id (or a PayPal-Request-Id header) makes checkout idempotent; it defaults to cart + instructions,
  * so repeating the same checkout never charges twice.
  * 200 CAPTURED (Store Sync style, with payment_confirmation), 422 STEP_UP_REQUIRED, 502 FAILED.
  */

@@ -1,6 +1,6 @@
 /**
  * Fixed size table for men's running shoes: US / UK / EU. Code, never the LLM, converts sizes; the
- * Phase 3 firewall uses this to compare a listing against a mandate. Values follow a common men's
+ * Phase 3 firewall uses this to compare a listing against a set of instructions. Values follow a common men's
  * running-shoe chart (US = UK + 1). Brands differ by up to half a size, so equivalence is exact
  * table lookup only: anything not in the table is "unknown", never guessed.
  */
