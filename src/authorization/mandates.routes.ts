@@ -6,6 +6,7 @@ import { loadSigner } from '../shared/crypto/signing';
 import { db, tx } from '../shared/db/pool';
 import { HttpError, notFound, route, zodDetails } from '../shared/http/errors';
 import { uuidParam } from '../shared/http/ids';
+import { wantsPage } from '../shared/http/page';
 import { compileMandate } from './mandate-compiler';
 import { checkMandateSignature, signMandate, type MandateRow } from './mandate-document';
 import { MandateSpec } from './mandate-spec';
@@ -193,7 +194,7 @@ mandates.get(
   route(async (req, res) => {
     const id = uuidParam(req.params.id, 'Mandate');
     const row = await load(id);
-    if (row.status === 'ACTIVE') return res.json(await view(row)); // reload of the return page
+    if (row.status === 'ACTIVE') return wantsPage(req) ? res.redirect(`/app/buyer?mandate=${row.id}&paypal=approved`) : res.json(await view(row)); // reload of the return page
     if (row.status !== 'DRAFT' || !row.payment_token_id) {
       throw new HttpError(409, 'MANDATE_NOT_PENDING', `Mandate is ${row.status}; call POST /mandates/${id}/approve first.`);
     }
@@ -218,6 +219,7 @@ mandates.get(
         active.paypal_customer_id,
       ]);
     });
+    if (wantsPage(req)) return res.redirect(`/app/buyer?mandate=${id}&paypal=approved`);
     res.json(await view(await load(id)));
   }),
 );
@@ -229,6 +231,7 @@ mandates.get(
     if (row.payment_token_id) {
       await db().query(`UPDATE payment_tokens SET status = 'FAILED' WHERE id = $1 AND status = 'PENDING'`, [row.payment_token_id]);
     }
+    if (wantsPage(req)) return res.redirect(`/app/buyer?mandate=${row.id}&paypal=cancelled`);
     res.json({ mandate_id: row.id, status: row.status, message: 'Approval was cancelled at PayPal. Call approve again for a new link.' });
   }),
 );

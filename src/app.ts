@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import express from 'express';
 import { cases } from './accountability/cases.routes';
 import { receipts } from './accountability/receipts.routes';
@@ -14,6 +16,7 @@ import { paypalWebhooks } from './paypal/webhooks.routes';
 import { agentRoutes } from './transaction/agent/routes';
 import { merchantCart } from './transaction/cart.routes';
 import { checkoutRoutes } from './transaction/checkout.routes';
+import { consoleRoutes } from './console/routes';
 
 /**
  * One app, organised as modules:
@@ -66,6 +69,14 @@ export function createApp() {
   // evidence
   app.use('/recorder', recorder);
   app.use('/catalog-snapshots', snapshots);
+  // screens: read-only views and the Clerk's model turn, then the built web app (npm run web:build)
+  app.use('/console', consoleRoutes);
+  const web = join(process.cwd(), 'web', 'dist');
+  if (existsSync(web)) {
+    app.use('/app', express.static(web, { index: false, maxAge: '1h' }));
+    app.get(/^\/app(\/.*)?$/, (_req, res) => res.sendFile(join(web, 'index.html')));
+    app.get('/', (_req, res) => res.redirect('/app/'));
+  }
 
   app.use((req, res) => {
     res.status(404).json({ name: 'RESOURCE_NOT_FOUND', message: `No route for ${req.method} ${req.path}` });

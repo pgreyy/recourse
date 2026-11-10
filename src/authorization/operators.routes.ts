@@ -4,6 +4,7 @@ import { config } from '../config';
 import { db, tx } from '../shared/db/pool';
 import { HttpError, notFound, route } from '../shared/http/errors';
 import { uuidParam } from '../shared/http/ids';
+import { wantsPage } from '../shared/http/page';
 import { cents, money, usedUnderAgreement } from '../settlement/exposure';
 import {
   AgreementRequest,
@@ -249,6 +250,7 @@ operators.get(
         await finishVaulting(c, token.id);
       });
     }
+    if (wantsPage(req)) return res.redirect(`/app/operator?operator=${op.id}&paypal=approved`);
     res.json(await view(op));
   }),
 );
@@ -258,6 +260,7 @@ operators.get(
   route(async (req, res) => {
     const op = await load(uuidParam(req.params.id, 'Operator'));
     await db().query(`UPDATE payment_tokens SET status = 'FAILED' WHERE operator_id = $1 AND status = 'PENDING'`, [op.id]);
+    if (wantsPage(req)) return res.redirect(`/app/operator?operator=${op.id}&paypal=cancelled`);
     res.json({ operator_id: op.id, message: 'Approval was cancelled at PayPal. Call approve again for a new link.' });
   }),
 );

@@ -10,7 +10,8 @@ Phase 1 (authorization: signed mandates, operators, agents, liability agreements
 (merchant and evidence: Store Sync style cart, catalog snapshots, flight recorder), Phase 3 (agent
 runs, deterministic checkout firewall, PayPal checkout anchored to the recorder), Phase 3b
 (ratification receipt) Phase 4 (accountability: cases, code checks, AI assessment validated in
-code, rulings, scorecard), Phase 5 (settlement on PayPal) and Phase 6 (reputation and merchant policy).
+code, rulings, scorecard), Phase 5 (settlement on PayPal), Phase 6 (reputation and merchant policy)
+and Phase 7 (the screens, with the Recourse console on AG Studio; see [docs/phase7-screens.md](docs/phase7-screens.md)).
 
 ## Setup
 
@@ -37,6 +38,10 @@ API key for one LLM provider (Gemini, OpenAI or Anthropic).
 6. Webhooks (optional): expose port 3000 over https (any tunnel) and run
    `npm run webhook:register -- https://<public host>`; set the printed `WEBHOOK_ID` in `.env`.
 7. Check types: `npm run typecheck`
+8. Screens: `npm --prefix web install`, then `npm run web:build`; the API serves them at
+   http://localhost:3000/app. For live editing run `npm run web:dev` (http://localhost:5173/app, API
+   calls proxied to port 3000). `AG_STUDIO_LICENSE_KEY` in `.env` is optional; without it AG Studio
+   runs in trial mode with a watermark.
 
 Then import `postman/recourse.postman_collection.json` into Postman and follow
 [docs/phase1-2-checks.md](docs/phase1-2-checks.md).
@@ -80,6 +85,11 @@ One Express app, organised as modules: `authorization`, `transaction`, `evidence
 
 Code: `src/<module>/` (API), `migrations/` (plain SQL, applied in name order by `npm run migrate`),
 `data/catalog.json` (demo catalog), `src/transaction/sizes.ts` (US/UK/EU size table).
+
+Screens (Phase 7) read through `GET /console/overview`, `/console/cases`, `/console/cases/:id`,
+`/console/recovered-by-agent-version`, `/console/agents`, `/console/runs`, `/console/runs/:id` (all
+read-only). `POST /agent/run` with `async: true` answers 202 as soon as the run starts. `POST
+/console/clerk/turn` is the Clerk's model turn (model fixed server-side, no tools executed there).
 
 ## Probes (sandbox only)
 

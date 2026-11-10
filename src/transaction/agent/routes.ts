@@ -14,6 +14,8 @@ const RunBody = z.object({
   dry_run: z.boolean().optional(),
   /** Pin the run to one provider in the model chain (e.g. to rehearse on OpenAI). */
   provider: z.enum(['gemini', 'openai', 'anthropic']).optional(),
+  /** Answer 202 as soon as the run has started (for the live timeline); poll GET /console/runs/:id. */
+  async: z.boolean().optional(),
 });
 
 /** POST /agent/run { mandate_id, agent_version_id, dry_run?, provider? } */
@@ -21,7 +23,15 @@ agentRoutes.post(
   '/run',
   route(async (req, res) => {
     const body = RunBody.parse(req.body);
-    res.json(await runAgent(body.mandate_id, body.agent_version_id, { dryRun: body.dry_run, provider: body.provider }));
+    if (!body.async) return res.json(await runAgent(body.mandate_id, body.agent_version_id, { dryRun: body.dry_run, provider: body.provider }));
+    let started!: (r: { run_id: string; case_ref: string }) => void;
+    const startedP = new Promise<{ run_id: string; case_ref: string }>((resolve) => (started = resolve));
+    const done = runAgent(body.mandate_id, body.agent_version_id, { dryRun: body.dry_run, provider: body.provider, onStarted: started });
+    // Errors before the run starts (mandate not active, unknown agent) answer this request; later ones are in the recorder.
+    done.catch((e) => console.log(`[agent] async run failed: ${(e as Error).message}`));
+    const r = await Promise.race([startedP, done.then(() => null)]);
+    if (!r) return res.json(await done);
+    res.status(202).json({ ...r, poll: `/console/runs/${r.run_id}` });
   }),
 );
 

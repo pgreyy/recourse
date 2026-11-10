@@ -4205,6 +4205,349 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Phase 7: Screens",
+      "description": "Read-only endpoints behind the screens, the async agent run and the Clerk turn. The screens themselves: /app.",
+      "item": [
+        {
+          "name": "7.1 Console reads (what the screens show)",
+          "description": "Read-only. Every number on the screens comes from these, the database and PayPal; nothing here moves money.",
+          "item": [
+            {
+              "name": "Overview (KPIs, exposure, labelled estimate)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json(); console.log('recovered (confirmed)', JSON.stringify(r.recovered_confirmed), 'estimate', JSON.stringify(r.dispute_costs_avoided_estimate.amount));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/console/overview",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "console",
+                    "overview"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Cases (grid rows)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.collectionVariables.set('console_case_id', (pm.response.json()[0] || {}).id || '');"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/console/cases",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "console",
+                    "cases"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Case detail (mandate, timeline, checks, conclusion, settlement)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/console/cases/{{console_case_id}}",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "console",
+                    "cases",
+                    "{{console_case_id}}"
+                  ]
+                },
+                "description": "Re-reads the PayPal order, capture and any dispute, so it takes a few seconds."
+              }
+            },
+            {
+              "name": "Confirmed recoveries by agent version, last 7 days",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/console/recovered-by-agent-version?days=7",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "console",
+                    "recovered-by-agent-version"
+                  ],
+                  "query": [
+                    {
+                      "key": "days",
+                      "value": "7"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Agents and operators (reputation, coverage, policy)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/console/agents",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "console",
+                    "agents"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Recent agent runs",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.collectionVariables.set('console_run_id', (pm.response.json()[0] || {}).id || '');"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/console/runs",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "console",
+                    "runs"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Agent run timeline and live anchor check",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json(); if (r.anchor) console.log('anchored', r.anchor.ok);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/console/runs/{{console_run_id}}",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "console",
+                    "runs",
+                    "{{console_run_id}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.2 Live agent run and the Clerk",
+          "description": "Both call the model (credits). The agent run also buys in the PayPal sandbox.",
+          "item": [
+            {
+              "name": "Start an agent run without waiting (202, then poll the timeline)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('202 started', () => pm.expect(pm.response.code).to.be.oneOf([200, 202]));",
+                      "const r = pm.response.json(); if (r.run_id) pm.collectionVariables.set('console_run_id', r.run_id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mandate_id\": \"{{mandate_id}}\",\n  \"agent_version_id\": \"{{agent_v20_id}}\",\n  \"async\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/agent/run",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "agent",
+                    "run"
+                  ]
+                },
+                "description": "Needs an ACTIVE mandate. Then run 7.1 / Agent run timeline until finished_at is set."
+              }
+            },
+            {
+              "name": "One Clerk model turn (what the console sends)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('has output', () => pm.expect(pm.response.json().output).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"instructions\": \"Answer in one sentence.\",\n  \"input\": [\n    {\n      \"type\": \"message\",\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"Say hello to the operator.\"\n        }\n      ]\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/console/clerk/turn",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "console",
+                    "clerk",
+                    "turn"
+                  ]
+                },
+                "description": "The model is fixed server-side (AI_CLERK_MODEL, default gpt-5-nano). The Clerk's tools run in the browser and are all read-only."
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -4290,6 +4633,16 @@
     },
     {
       "key": "obligation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "console_case_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "console_run_id",
       "value": "",
       "type": "string"
     },

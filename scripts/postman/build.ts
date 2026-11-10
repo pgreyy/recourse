@@ -994,6 +994,46 @@ const phase6: Array<{ name: string; description: string; items: Req[] }> = [
   },
 ];
 
+const phase7: Array<{ name: string; description: string; items: Req[] }> = [
+  {
+    name: '7.1 Console reads (what the screens show)',
+    description: 'Read-only. Every number on the screens comes from these, the database and PayPal; nothing here moves money.',
+    items: [
+      { app: true, name: 'Overview (KPIs, exposure, labelled estimate)', method: 'GET', path: '/console/overview', test: [expectStatus(200), "const r = pm.response.json(); console.log('recovered (confirmed)', JSON.stringify(r.recovered_confirmed), 'estimate', JSON.stringify(r.dispute_costs_avoided_estimate.amount));"] },
+      { app: true, name: 'Cases (grid rows)', method: 'GET', path: '/console/cases', test: [expectStatus(200), "pm.collectionVariables.set('console_case_id', (pm.response.json()[0] || {}).id || '');"] },
+      { app: true, name: 'Case detail (mandate, timeline, checks, conclusion, settlement)', method: 'GET', path: '/console/cases/{{console_case_id}}', test: [expectStatus(200)], description: 'Re-reads the PayPal order, capture and any dispute, so it takes a few seconds.' },
+      { app: true, name: 'Confirmed recoveries by agent version, last 7 days', method: 'GET', path: '/console/recovered-by-agent-version?days=7', test: [expectStatus(200)] },
+      { app: true, name: 'Agents and operators (reputation, coverage, policy)', method: 'GET', path: '/console/agents', test: [expectStatus(200)] },
+      { app: true, name: 'Recent agent runs', method: 'GET', path: '/console/runs', test: [expectStatus(200), "pm.collectionVariables.set('console_run_id', (pm.response.json()[0] || {}).id || '');"] },
+      { app: true, name: 'Agent run timeline and live anchor check', method: 'GET', path: '/console/runs/{{console_run_id}}', test: [expectStatus(200), "const r = pm.response.json(); if (r.anchor) console.log('anchored', r.anchor.ok);"] },
+    ],
+  },
+  {
+    name: '7.2 Live agent run and the Clerk',
+    description: 'Both call the model (credits). The agent run also buys in the PayPal sandbox.',
+    items: [
+      {
+        app: true,
+        name: 'Start an agent run without waiting (202, then poll the timeline)',
+        method: 'POST',
+        path: '/agent/run',
+        body: { mandate_id: '{{mandate_id}}', agent_version_id: '{{agent_v20_id}}', async: true },
+        test: ["pm.test('202 started', () => pm.expect(pm.response.code).to.be.oneOf([200, 202]));", "const r = pm.response.json(); if (r.run_id) pm.collectionVariables.set('console_run_id', r.run_id);"],
+        description: 'Needs an ACTIVE mandate. Then run 7.1 / Agent run timeline until finished_at is set.',
+      },
+      {
+        app: true,
+        name: 'One Clerk model turn (what the console sends)',
+        method: 'POST',
+        path: '/console/clerk/turn',
+        body: { instructions: 'Answer in one sentence.', input: [{ type: 'message', role: 'user', content: [{ type: 'text', text: 'Say hello to the operator.' }] }] },
+        test: [expectStatus(200), "pm.test('has output', () => pm.expect(pm.response.json().output).to.be.an('array'));"],
+        description: 'The model is fixed server-side (AI_CLERK_MODEL, default gpt-5-nano). The Clerk\'s tools run in the browser and are all read-only.',
+      },
+    ],
+  },
+];
+
 function toItem(r: Req) {
   const [rawPath, query] = r.path.split('?');
   const base = r.app ? '{{app_base_url}}' : '{{base_url}}';
@@ -1063,6 +1103,8 @@ const variables: Record<string, string> = {
   case_id: '',
   ruling_id: '',
   obligation_id: '',
+  console_case_id: '',
+  console_run_id: '',
   appeal_id: '',
   run_case_ref: '',
   order_ref: '',
@@ -1118,6 +1160,7 @@ const collection = {
     { name: 'Phase 4: Accountability', description: 'Cases, code checks, counterfactual, AI assessment with validation, injection guard, rulings, scorecard.', group: phase4 },
     { name: 'Phase 5: Settlement', description: 'Obligations from approved rulings, checked and executed on PayPal, confirmed by webhook.', group: phase5 },
     { name: 'Phase 6: Reputation', description: 'Agent reliability, operator accountability, merchant policy.', group: phase6 },
+    { name: 'Phase 7: Screens', description: 'Read-only endpoints behind the screens, the async agent run and the Clerk turn. The screens themselves: /app.', group: phase7 },
   ].map((phase) => ({
     name: phase.name,
     description: phase.description,
@@ -1128,6 +1171,6 @@ const collection = {
 
 mkdirSync('postman', { recursive: true });
 writeFileSync('postman/recourse.postman_collection.json', json(collection) + '\n');
-const all = [...folders, ...phase1, ...phase2, ...phase3, ...phase3b, ...phase4, ...phase5, ...phase6];
+const all = [...folders, ...phase1, ...phase2, ...phase3, ...phase3b, ...phase4, ...phase5, ...phase6, ...phase7];
 const count = all.reduce((n, f) => n + f.items.length, 0);
-console.log(`Wrote postman/recourse.postman_collection.json (8 phase folders, ${all.length} folders, ${count} requests)`);
+console.log(`Wrote postman/recourse.postman_collection.json (9 phase folders, ${all.length} folders, ${count} requests)`);

@@ -241,7 +241,7 @@ export async function approveRuling(cs: CaseRow, approvedBy: { name: string; ema
 export async function caseView(cs: CaseRow) {
   const statements = (await db().query('SELECT id, party, author, text, flagged, created_at FROM case_statements WHERE case_id = $1 ORDER BY created_at', [cs.id])).rows;
   const a = (await db().query('SELECT * FROM assessments WHERE case_id = $1 ORDER BY created_at DESC LIMIT 1', [cs.id])).rows[0];
-  const ruling = (await db().query('SELECT id, status, verdict, liable_party, amount_value::text AS amount, currency, document_hash, approved_by_name, approved_at, appeal_deadline FROM rulings WHERE case_id = $1 ORDER BY created_at DESC LIMIT 1', [cs.id])).rows[0] ?? null;
+  const ruling = (await db().query('SELECT id, status, verdict, liable_party, amount_value::text AS amount, currency, document_hash, approved_by_name, approved_at, appeal_deadline, operator_accepted_at, operator_accepted_by FROM rulings WHERE case_id = $1 ORDER BY created_at DESC LIMIT 1', [cs.id])).rows[0] ?? null;
   const order = cs.order_id ? (await db().query('SELECT order_ref, total_value::text AS total, currency, compliance, paypal_capture_id FROM orders WHERE id = $1', [cs.order_id])).rows[0] : null;
   return {
     id: cs.id,

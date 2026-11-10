@@ -21,26 +21,39 @@ function page(r: NonNullable<ReceiptView>, token: string, notice?: string): stri
   const reported = r.cases.length > 0;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Purchase receipt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--ink:#1b1f24;--muted:#5b6470;--line:#e3e6ea;--ok:#13795b;--warn:#a15c00;--bad:#b42318;--btn:#1b1f24}
-@media (prefers-color-scheme:dark){:root{--bg:#111418;--card:#1a1e24;--ink:#eef1f4;--muted:#a3abb5;--line:#2b3138;--ok:#4cc79a;--warn:#f0a542;--bad:#ff7a6e;--btn:#eef1f4}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-main{max-width:560px;margin:0 auto;padding:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:0 0 12px}
-h1{font-size:20px;margin:4px 0 12px}h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 8px}
-.badge{display:inline-block;font-weight:600;padding:2px 10px;border-radius:999px;border:1px solid currentColor}
-.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
-ul{margin:0;padding-left:20px}li{margin:4px 0}.muted{color:var(--muted);font-size:14px}
-dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}dt{color:var(--muted)}dd{margin:0;word-break:break-all}
-button{width:100%;font:inherit;font-weight:600;padding:12px;border-radius:10px;border:1px solid var(--btn);cursor:pointer;margin-top:8px}
-.primary{background:var(--btn);color:var(--bg)}.secondary{background:transparent;color:var(--ink)}
-textarea{width:100%;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);min-height:70px}
-.notice{border-left:4px solid var(--ok)}
-</style></head><body><main>
+:root{--paper:#f5f4f0;--card:#fff;--ink:#14201f;--ink2:#44514f;--muted:#5f6b68;--line:#e0ddd5;--line2:#c7c2b6;--accent:#0b4f4a;--accent2:#083d39;--soft:#e2edeb;
+--ok:#1a5c35;--okbg:#e3f0e7;--okl:#9cc7aa;--warn:#6f4500;--warnbg:#fbf0d6;--warnl:#e1bf72;--bad:#94231a;--badbg:#f8e4e0;--badl:#df9f95}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+header{background:var(--ink);color:#fff;height:52px;display:flex;align-items:center;gap:10px;padding:0 16px;font:600 16px 'IBM Plex Serif',Georgia,serif}
+header svg{width:22px;height:22px}header .sb{margin-left:auto;font:400 12px 'IBM Plex Sans',sans-serif;color:#d6dcdb;border:1px solid #4d5c5a;border-radius:99px;padding:2px 8px}
+main{max-width:600px;margin:0 auto;padding:20px 16px 40px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px 18px;margin:0 0 12px}
+h1{font:600 24px/1.25 'IBM Plex Serif',Georgia,serif;margin:4px 0 16px}
+h2{font-size:12.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);margin:0 0 8px}
+.badge{display:inline-flex;align-items:center;gap:6px;font:600 12px/20px 'IBM Plex Sans',sans-serif;letter-spacing:.03em;text-transform:uppercase;padding:1px 9px;border-radius:4px;border:1px solid}
+.badge::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+.badge.ok{color:var(--ok);background:var(--okbg);border-color:var(--okl)}.badge.warn{color:var(--warn);background:var(--warnbg);border-color:var(--warnl)}.badge.bad{color:var(--bad);background:var(--badbg);border-color:var(--badl)}
+p.ok{color:var(--ok)}p.warn,li.warn{color:var(--warn)}
+.quote{font:600 17px/1.5 'IBM Plex Serif',Georgia,serif;border-left:3px solid var(--line2);padding-left:12px;margin:0 0 8px}
+ul{margin:0;padding-left:20px}li{margin:4px 0}.muted{color:var(--muted);font-size:13.5px}
+dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0}dt{color:var(--muted)}dd{margin:0;word-break:break-all;font:13px/1.6 'IBM Plex Mono',monospace}
+button{width:100%;font:500 15px 'IBM Plex Sans',sans-serif;height:44px;border-radius:6px;border:1px solid var(--accent);cursor:pointer;margin-top:8px}
+.primary{background:var(--accent);color:#fff}.primary:hover{background:var(--accent2)}.secondary{background:#fff;color:var(--accent);border-color:var(--line2)}.secondary:hover{background:var(--soft)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+textarea{width:100%;font:inherit;padding:8px 10px;border-radius:6px;border:1px solid var(--line2);background:#fff;color:var(--ink);min-height:76px}
+textarea:focus-visible{outline:2px solid var(--accent);outline-offset:0}
+label{display:block;font-size:13px;font-weight:500;color:var(--ink2);margin:12px 0 6px}
+.notice{border-left:3px solid var(--accent)}
+</style></head><body>
+<header><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#0b4f4a"/><path d="M10 23V9h7a4.5 4.5 0 0 1 0 9h-7m7 0 5 5" stroke="#fff" stroke-width="2.6" fill="none"/></svg>Recourse<span class="sb">PayPal sandbox</span></header>
+<main>
 <h1>Purchase receipt</h1>
-${notice ? `<div class="card notice">${esc(notice)}</div>` : ''}
+${notice ? `<div class="card notice" role="status">${esc(notice)}</div>` : ''}
 <div class="card"><h2>Compliance</h2><span class="badge ${st.cls}">${esc(st.label)}</span><p class="muted">${esc(st.text)}</p></div>
-<div class="card"><h2>What you asked for</h2><p>${esc(r.source_text)}</p>
+<div class="card"><h2>What you asked for</h2><p class="quote">${esc(r.source_text)}</p>
 <p class="muted">Mandate v${esc(r.mandate_version)}: ${esc(spec.category)}, up to ${esc(spec.max_total.value)} ${esc(spec.max_total.currency)} in total, by ${esc(spec.deadline)}</p></div>
 <div class="card"><h2>What was bought</h2><ul>${lines
     .map((l) => `<li>${esc(l.quantity)} × ${esc(l.name)}, size ${esc(l.attributes.size)} ${l.attributes.unit_system ? esc(l.attributes.unit_system) : '(no size system given)'}${l.attributes.gender ? `, ${esc(l.attributes.gender)}'s` : ''}, ${esc(l.price)} ${esc(r.currency)}</li>`)
@@ -59,8 +72,8 @@ ${
 }
 ${
   reported
-    ? `<p class="warn">You reported an issue. Case ${esc(r.cases[r.cases.length - 1].id)} is ${esc(r.cases[r.cases.length - 1].status)}.</p>`
-    : `<form method="post" action="/r/${esc(token)}/report"><textarea name="description" placeholder="What is wrong? (optional)"></textarea><button class="secondary" type="submit">Report an issue</button></form>`
+    ? `<p class="warn">You reported an issue. Case ${esc(r.cases[r.cases.length - 1].case_ref)} is ${esc(String(r.cases[r.cases.length - 1].status).toLowerCase().replace(/_/g, ' '))}.</p>`
+    : `<form method="post" action="/r/${esc(token)}/report"><label for="desc">What is wrong? (optional)</label><textarea id="desc" name="description"></textarea><button class="secondary" type="submit">Report an issue</button></form>`
 }
 <p class="muted">Confirming is not a waiver of your PayPal dispute rights.</p>
 </div>

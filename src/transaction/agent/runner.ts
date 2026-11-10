@@ -159,7 +159,7 @@ function systemPrompt(instructions: string, spec: MandateSpec, remaining: string
 export type RunOutcome = Awaited<ReturnType<typeof runAgent>>;
 
 /** POST /agent/run: one agent version shops under one mandate; everything goes into the recorder. */
-export async function runAgent(mandateId: string, agentVersionId: string, opts: { dryRun?: boolean; provider?: 'gemini' | 'openai' | 'anthropic' } = {}) {
+export async function runAgent(mandateId: string, agentVersionId: string, opts: { dryRun?: boolean; provider?: 'gemini' | 'openai' | 'anthropic'; onStarted?: (r: { run_id: string; case_ref: string }) => void } = {}) {
   const mandate = await loadMandate(mandateId);
   const dryRun = Boolean(opts.dryRun);
   // A dry run may rehearse on a DRAFT mandate; a real run needs the buyer's approval (ACTIVE).
@@ -189,6 +189,7 @@ export async function runAgent(mandateId: string, agentVersionId: string, opts: 
     dry_run: dryRun,
     provider_pinned: opts.provider ?? null,
   });
+  opts.onStarted?.({ run_id: run.id, case_ref: caseRef });
 
   const state: RunState = { toolCalls: 0, dryRun, caseRef, agentVersionId: av.id, mandateId: mandate.id };
   const tools = buildTools(state);

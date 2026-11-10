@@ -97,7 +97,7 @@ export async function loadReceipt(receiptId: string) {
   );
   if (!rows[0]) return null;
   const r = rows[0];
-  const cases = await db().query('SELECT id, status, description, created_at FROM cases WHERE receipt_id = $1 ORDER BY created_at', [receiptId]);
+  const cases = await db().query('SELECT id, case_ref, status, description, created_at FROM cases WHERE receipt_id = $1 ORDER BY created_at', [receiptId]);
   const diff = receiptDifferences(r.spec as MandateSpec, r.lines as Line[]);
   return { ...r, ...diff, cases: cases.rows, firewall: r.firewall as FirewallResult };
 }
