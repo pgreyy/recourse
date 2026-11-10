@@ -5,7 +5,7 @@ import '../config';
 import { env } from '../config';
 import { pp } from './http';
 
-const EVENT_TYPES = ['CUSTOMER.DISPUTE.CREATED', 'CUSTOMER.DISPUTE.UPDATED', 'CUSTOMER.DISPUTE.RESOLVED', 'INVOICING.INVOICE.PAID', 'PAYMENT.CAPTURE.REFUNDED'];
+const EVENT_TYPES = ['CUSTOMER.DISPUTE.CREATED', 'CUSTOMER.DISPUTE.UPDATED', 'CUSTOMER.DISPUTE.RESOLVED', 'INVOICING.INVOICE.PAID', 'PAYMENT.CAPTURE.REFUNDED', 'PAYMENT.CAPTURE.COMPLETED'];
 
 async function main() {
   const base = (process.argv[2] ?? env('WEBHOOK_BASE_URL') ?? '').replace(/\/$/, '');

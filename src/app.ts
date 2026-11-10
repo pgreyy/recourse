@@ -2,6 +2,8 @@ import express from 'express';
 import { cases } from './accountability/cases.routes';
 import { receipts } from './accountability/receipts.routes';
 import { scorecard } from './accountability/scorecard';
+import { appeals, reputation, rulings } from './accountability/rulings.routes';
+import { caseSettlement, settlements } from './settlement/routes';
 import { agents } from './authorization/agents.routes';
 import { mandates } from './authorization/mandates.routes';
 import { operators } from './authorization/operators.routes';
@@ -55,6 +57,12 @@ export function createApp() {
   app.use('/r', receipts);
   app.use('/cases', cases);
   app.use('/scorecard', scorecard);
+  app.use('/cases', caseSettlement); // GET /cases/:id/settlement
+  app.use('/rulings', rulings);
+  app.use('/appeals', appeals);
+  app.use(reputation); // GET /agents/:id/reputation, GET /operators/:id/reputation
+  // settlement
+  app.use('/settlements', settlements);
   // evidence
   app.use('/recorder', recorder);
   app.use('/catalog-snapshots', snapshots);

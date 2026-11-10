@@ -877,7 +877,7 @@ const phase4: Array<{ name: string; description: string; items: Req[] }> = [
         method: 'POST',
         path: '/cases/{{case_id}}/approve',
         body: { approved_by: { name: 'Demo reviewer', email: 'reviewer@example.com' } },
-        test: [expectStatus(200), "const r = pm.response.json(); console.log(r.status, r.document.verdict, r.document.liable_party, r.document.amount.value, '| appeal by', r.document.appeal_deadline);"],
+        test: [expectStatus(200), "const r = pm.response.json(); pm.collectionVariables.set('ruling_id', r.ruling_id); if (r.obligation_id) pm.collectionVariables.set('obligation_id', r.obligation_id); console.log(r.status, r.document.verdict, r.document.liable_party, r.document.amount.value, '| appeal by', r.document.appeal_deadline);"],
       },
     ],
   },
@@ -892,6 +892,103 @@ const phase4: Array<{ name: string; description: string; items: Req[] }> = [
         method: 'GET',
         path: '/scorecard',
         test: [expectStatus(200), "const s = pm.response.json(); if (s.runs[0]) console.log('accuracy', s.runs[0].accuracy, 'false AGENT_FAULT', s.runs[0].false_agent_fault_rate, 'INCONCLUSIVE', s.runs[0].inconclusive_rate);"],
+      },
+    ],
+  },
+];
+
+const phase5: Array<{ name: string; description: string; items: Req[] }> = [
+  {
+    name: '5.1 Rulings: operator acceptance and appeals',
+    description: 'set ruling_id from 4.2 / Approve ruling. Operator acceptance waives the appeal and lets recovery run now.',
+    items: [
+      { app: true, name: 'Get ruling', method: 'GET', path: '/rulings/{{ruling_id}}', test: [expectStatus(200)] },
+      {
+        app: true,
+        name: 'Operator accepts the ruling (waives appeal)',
+        method: 'POST',
+        path: '/rulings/{{ruling_id}}/operator-accept',
+        body: { accepted_by: 'Acme Ops' },
+        test: [expectStatus(200), saveVar('obligation_id', 'pm.response.json().obligation_id')],
+      },
+      {
+        app: true,
+        name: 'Operator appeals instead (within the window)',
+        method: 'POST',
+        path: '/rulings/{{ruling_id}}/appeal',
+        body: { note: 'The buyer agreed to UK sizing in a chat with our support team.' },
+        test: [expectStatus(201), saveVar('appeal_id', 'pm.response.json().id')],
+        description: 'Not possible after operator-accept. The note goes through the injection guard.',
+      },
+      {
+        app: true,
+        name: 'Decide appeal (UPHOLD or REVERSE)',
+        method: 'POST',
+        path: '/appeals/{{appeal_id}}/decide',
+        body: { decision: 'UPHOLD', decided_by: 'Demo reviewer', note: 'No record of the buyer agreeing to UK sizing.' },
+        test: [expectStatus(200)],
+      },
+    ],
+  },
+  {
+    name: '5.2 Settlement',
+    description: 'Execute runs the checks, then the PayPal actions. Each action is written before the PayPal call and confirmed by webhook (or reconcile).',
+    items: [
+      {
+        app: true,
+        name: 'Execute obligation',
+        method: 'POST',
+        path: '/settlements/{{obligation_id}}/execute',
+        body: {},
+        test: [
+          expectStatus(200),
+          'const r = pm.response.json();',
+          "console.log(r.result.status, '-', r.result.note);",
+          "r.settlement.actions.forEach(a => console.log(a.action, a.status, a.confirmation, JSON.stringify(a.paypal_ids)));",
+        ],
+      },
+      { app: true, name: 'Get obligation', method: 'GET', path: '/settlements/{{obligation_id}}', test: [expectStatus(200)] },
+      { app: true, name: 'Reconcile (confirm by GET if a webhook is late)', method: 'POST', path: '/settlements/{{obligation_id}}/reconcile', body: {}, test: [expectStatus(200)] },
+      { app: true, name: 'List settlements', method: 'GET', path: '/settlements', test: [expectStatus(200)] },
+      { app: true, name: 'Case settlement', method: 'GET', path: '/cases/{{case_id}}/settlement', test: [expectStatus(200)] },
+      {
+        app: true,
+        name: 'Operator exposure (used / remaining)',
+        method: 'GET',
+        path: '/operators/{{operator_id}}/exposure',
+        test: [expectStatus(200), "const e = pm.response.json(); console.log('used', e.used.value, 'remaining', e.remaining.value);"],
+      },
+    ],
+  },
+];
+
+const phase6: Array<{ name: string; description: string; items: Req[] }> = [
+  {
+    name: '6.1 Reputation and merchant policy',
+    description: 'Only finalized rulings count. Policy: normal, step-up (1+ confirmed agent fault in 30 days) or suspended (3+).',
+    items: [
+      {
+        app: true,
+        name: 'Agent version reputation (Acme Shopper v1.3)',
+        method: 'GET',
+        path: '/agents/{{agent_v13_id}}/reputation',
+        test: [expectStatus(200), "const r = pm.response.json(); console.log('reliability', r.reliability, 'policy', r.merchant_policy.policy, r.merchant_policy.reason || '');"],
+      },
+      {
+        app: true,
+        name: 'Operator reputation',
+        method: 'GET',
+        path: '/operators/{{operator_id}}/reputation',
+        test: [expectStatus(200), "const r = pm.response.json(); console.log('accountability', r.accountability, 'outstanding', JSON.stringify(r.outstanding_exposure));"],
+      },
+      {
+        app: true,
+        name: 'Checkout as a step-up agent (expect 422 "recent confirmed agent fault")',
+        method: 'POST',
+        path: '/merchant-cart/{{cart_id}}/checkout',
+        body: { mandate_id: '{{mandate_id}}', agent_version_id: '{{agent_v13_id}}', request_id: 'stepup-{{case_ref}}' },
+        test: [expectStatus(422), "pm.test('reputation step-up', () => pm.expect(pm.response.json().details.map(d => d.description)).to.include('recent confirmed agent fault'));"],
+        description: 'Needs an ACTIVE mandate in mandate_id and a READY cart in cart_id (3.2 / Create cart). Nothing is charged.',
       },
     ],
   },
@@ -964,6 +1061,9 @@ const variables: Record<string, string> = {
   agent_v20_id: '',
   agent_drift_id: '',
   case_id: '',
+  ruling_id: '',
+  obligation_id: '',
+  appeal_id: '',
   run_case_ref: '',
   order_ref: '',
   receipt_url: '',
@@ -1016,6 +1116,8 @@ const collection = {
     { name: 'Phase 3: Agent and checkout', description: 'Agent runs, deterministic firewall, anchored PayPal checkout. Run npm run seed:agents first.', group: phase3 },
     { name: 'Phase 3b: Ratification receipt', description: 'Receipt page, signed confirmation, issue reports.', group: phase3b },
     { name: 'Phase 4: Accountability', description: 'Cases, code checks, counterfactual, AI assessment with validation, injection guard, rulings, scorecard.', group: phase4 },
+    { name: 'Phase 5: Settlement', description: 'Obligations from approved rulings, checked and executed on PayPal, confirmed by webhook.', group: phase5 },
+    { name: 'Phase 6: Reputation', description: 'Agent reliability, operator accountability, merchant policy.', group: phase6 },
   ].map((phase) => ({
     name: phase.name,
     description: phase.description,
@@ -1026,6 +1128,6 @@ const collection = {
 
 mkdirSync('postman', { recursive: true });
 writeFileSync('postman/recourse.postman_collection.json', json(collection) + '\n');
-const all = [...folders, ...phase1, ...phase2, ...phase3, ...phase3b, ...phase4];
+const all = [...folders, ...phase1, ...phase2, ...phase3, ...phase3b, ...phase4, ...phase5, ...phase6];
 const count = all.reduce((n, f) => n + f.items.length, 0);
-console.log(`Wrote postman/recourse.postman_collection.json (6 phase folders, ${all.length} folders, ${count} requests)`);
+console.log(`Wrote postman/recourse.postman_collection.json (8 phase folders, ${all.length} folders, ${count} requests)`);

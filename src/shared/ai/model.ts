@@ -84,9 +84,16 @@ export type Answered = { provider: Provider; modelId: string; role: string; fall
 export async function runWithFallback<T>(
   task: string,
   fn: (c: Candidate) => Promise<T>,
-  opts: { canFallback?: () => boolean; only?: Provider } = {},
+  opts: { canFallback?: () => boolean; only?: Provider; first?: { provider: Provider; modelId: string } } = {},
 ): Promise<{ value: T } & Answered> {
-  const chain = candidateModels().filter((c) => !opts.only || c.provider === opts.only);
+  let chain = candidateModels().filter((c) => !opts.only || c.provider === opts.only);
+  if (opts.first) {
+    // A task-specific model goes first (e.g. AI_ASSESS_MODEL for case assessments); the normal chain follows.
+    const key = opts.first.provider === 'openai' ? env('OPENAI_API_KEY') : env('AI_API_KEY');
+    if (!key) throw new ConfigError(`no API key for ${opts.first.provider}`);
+    const first = { ...build(opts.first.provider, key, opts.first.modelId), role: 'primary' };
+    chain = [first, ...chain.filter((c) => !(c.provider === first.provider && c.modelId === first.modelId)).map((c, i) => ({ ...c, role: `fallback ${i + 1}` }))];
+  }
   if (!chain.length) throw new ConfigError(`no configured model for provider ${opts.only}`);
   const failures: string[] = [];
   for (let i = 0; i < chain.length; i++) {
@@ -121,6 +128,8 @@ export async function generateObjectWithFallback<S extends z.ZodType>(opts: {
   timeoutMs?: number;
   /** Reasoning effort for OpenAI reasoning models (default: the candidate's, i.e. minimal). */
   openaiEffort?: 'minimal' | 'low' | 'medium';
+  /** A task-specific model to try first. */
+  first?: { provider: Provider; modelId: string };
 }): Promise<ObjectResult<z.infer<S>>> {
   const r = await runWithFallback(opts.task, async (c) => {
     const result = await generateText({
@@ -134,7 +143,7 @@ export async function generateObjectWithFallback<S extends z.ZodType>(opts: {
         opts.openaiEffort && c.provider === 'openai' && c.providerOptions ? { openai: { ...c.providerOptions.openai, reasoningEffort: opts.openaiEffort } } : c.providerOptions,
     });
     return result.output as z.infer<S>;
-  });
+  }, { first: opts.first });
   const { value, ...answered } = r;
   return { output: value, ...answered };
 }

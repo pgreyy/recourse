@@ -1,5 +1,6 @@
 import express, { Router } from 'express';
 import { openCaseFromDispute } from '../accountability/cases';
+import { onCaptureCompleted, onInvoicePaid, onRefundCompleted } from '../settlement/confirm';
 import { appendEntry } from '../evidence/recorder';
 import { env } from '../config';
 import { db } from '../shared/db/pool';
@@ -70,6 +71,17 @@ async function process(event: any) {
     const cs = fresh.status === 200 && type !== 'CUSTOMER.DISPUTE.RESOLVED' ? await openCaseFromDispute(d) : null;
     return { result: { ...result, case_id: cs?.id ?? null }, orderId: order?.id };
   }
+  if (type === 'PAYMENT.CAPTURE.COMPLETED') {
+    const obligation = await onCaptureCompleted(res.id, 'webhook');
+    const order = await findOrder(res.invoice_id, res.id);
+    return { result: { capture_id: res.id, status: res.status, custom_id: res.custom_id ?? null, invoice_id: res.invoice_id ?? null, settlement_obligation_confirmed: obligation }, orderId: order?.id };
+  }
+  if (type === 'INVOICING.INVOICE.PAID') {
+    const invoiceId = res.invoice?.id ?? res.id;
+    const obligation = invoiceId ? await onInvoicePaid(invoiceId, 'webhook') : null;
+    return { result: { invoice_id: invoiceId, settlement_obligation_confirmed: obligation }, orderId: undefined };
+  }
+  if (type === 'PAYMENT.CAPTURE.REFUNDED') await onRefundCompleted(res.id, 'webhook');
   if (type === 'PAYMENT.CAPTURE.REFUNDED' || type.startsWith('PAYMENT.CAPTURE.')) {
     const captureId = res.links?.find((l: { rel: string }) => l.rel === 'up')?.href?.split('/').pop() ?? res.id;
     const order = await findOrder(res.invoice_id, captureId);

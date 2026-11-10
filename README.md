@@ -9,8 +9,8 @@ Status: Phase 0 (PayPal sandbox probes, results in [docs/phase0-findings.md](doc
 Phase 1 (authorization: signed mandates, operators, agents, liability agreements), Phase 2
 (merchant and evidence: Store Sync style cart, catalog snapshots, flight recorder), Phase 3 (agent
 runs, deterministic checkout firewall, PayPal checkout anchored to the recorder), Phase 3b
-(ratification receipt) and Phase 4 (accountability: cases, code checks, AI assessment validated in
-code, rulings, scorecard).
+(ratification receipt) Phase 4 (accountability: cases, code checks, AI assessment validated in
+code, rulings, scorecard), Phase 5 (settlement on PayPal) and Phase 6 (reputation and merchant policy).
 
 ## Setup
 
@@ -41,7 +41,7 @@ API key for one LLM provider (Gemini, OpenAI or Anthropic).
 Then import `postman/recourse.postman_collection.json` into Postman and follow
 [docs/phase1-2-checks.md](docs/phase1-2-checks.md).
 
-## API (Phases 1 to 4)
+## API (Phases 1 to 6)
 
 One Express app, organised as modules: `authorization`, `transaction`, `evidence`, `accountability`,
 `settlement`, plus `paypal` (the one PayPal adapter, shared with the probes) and `shared`.
@@ -70,6 +70,9 @@ One Express app, organised as modules: `authorization`, `transaction`, `evidence
 | `POST /cases/:id/assess` | Code checks, counterfactual and injection scan, then one model call, then validation in code |
 | `POST /cases/:id/operator-statement` | Operator text on a case, kept as untrusted evidence and flagged if it reads like instructions |
 | `POST /cases/:id/approve` | Signed ruling from a validated assessment (no money moves) |
+| `POST /rulings/:id/operator-accept`, `POST /rulings/:id/appeal`, `POST /appeals/:id/decide` | Operator accepts a ruling (waives the appeal) or appeals it; a human decides appeals |
+| `GET /settlements`, `GET /settlements/:id`, `POST /settlements/:id/execute`, `POST /settlements/:id/reconcile`, `GET /cases/:id/settlement` | Settlement obligations from approved rulings: checked, executed on PayPal, confirmed by webhook |
+| `GET /agents/:id/reputation`, `GET /operators/:id/reputation` | Agent reliability, operator accountability, merchant policy (normal / step-up / suspended) |
 | `POST /scorecard/run`, `GET /scorecard` | 24 labelled fixture cases through the same pipeline; accuracy, false AGENT_FAULT rate, INCONCLUSIVE rate |
 | `GET /catalog-snapshots/:id` | A stored catalog snapshot, re-hashed |
 | `POST /recorder/:case_ref/entries`, `GET /recorder/:case_ref`, `GET /recorder/:case_ref/verify` | Flight recorder: hash chain with signed checkpoints |

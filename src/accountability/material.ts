@@ -53,7 +53,7 @@ export type CaseMaterial = {
     captured_at: Date | null;
     spent_before_cents: number;
   };
-  paypal: { order: null | { description: string | null; custom_id: string | null; invoice_id: string | null; capture: null | { id: string; status: string; amount: { value: string; currency_code: string } } }; read_error: string | null };
+  paypal: { order: null | { description: string | null; custom_id: string | null; invoice_id: string | null; capture: null | { id: string; status: string; status_reason: string | null; amount: { value: string; currency_code: string } } }; read_error: string | null };
   recorder: { entries: RecorderEntry[]; checkpoints: Checkpoint[] };
   snapshot: null | { id: string; sha256_stored: string; snapshot: Snapshot };
   receipt: null | { status: string; acknowledgement_hash: string | null };
@@ -114,7 +114,7 @@ export async function loadCaseMaterial(c: CaseRow): Promise<CaseMaterial> {
           description: unit.description ?? null,
           custom_id: unit.custom_id ?? null,
           invoice_id: unit.invoice_id ?? null,
-          capture: cap ? { id: cap.id, status: cap.status, amount: cap.amount } : null,
+          capture: cap ? { id: cap.id, status: cap.status, status_reason: cap.status_details?.reason ?? null, amount: cap.amount } : null,
         },
         read_error: null,
       };

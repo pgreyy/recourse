@@ -42,7 +42,7 @@ export type FirewallInput = {
   cart: { currency: string; total_cents: number; lines: FirewallLine[] };
   merchant: { id: string; name: string; delivery_days: number | null };
   /** The buying agent's liability coverage. null = buyer-initiated checkout (no agent involved). */
-  agent: { agent_version_id: string; covered: boolean; detail: string } | null;
+  agent: { agent_version_id: string; covered: boolean; detail: string; policy?: 'normal' | 'step-up' | 'suspended'; policy_reason?: string | null } | null;
   now: Date;
 };
 
@@ -87,6 +87,9 @@ export function runFirewall(input: FirewallInput): FirewallResult {
   // operator incentive: an agent nobody has agreed to pay for can only buy with the buyer's fresh approval
   if (input.agent) {
     checks.push({ rule: 'operator.coverage', status: input.agent.covered ? 'PASS' : 'VIOLATION', detail: input.agent.detail });
+    // merchant policy from reputation: step-up or suspended agents need the buyer's fresh approval
+    const policy = input.agent.policy ?? 'normal';
+    checks.push({ rule: 'agent.reputation', status: policy === 'normal' ? 'PASS' : 'VIOLATION', detail: policy === 'normal' ? 'merchant policy normal' : (input.agent.policy_reason ?? policy) });
   } else {
     checks.push({ rule: 'operator.coverage', status: 'PASS', detail: 'no agent: buyer-initiated checkout' });
   }

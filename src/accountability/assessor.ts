@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { env } from '../config';
 import { generateObjectWithFallback } from '../shared/ai/model';
 import { canonicalHash } from '../shared/crypto/canonical';
 import type { EvidencePack } from './evidence';
@@ -64,6 +65,8 @@ export async function assessWithModel(pack: EvidencePack) {
     schema: schemaFor(pack),
     timeoutMs: 120_000,
     openaiEffort: 'low',
+    // Rulings get their own (stronger) model when AI_ASSESS_MODEL is set; agents and the mandate compiler don't.
+    first: env('AI_ASSESS_MODEL') ? { provider: 'openai', modelId: env('AI_ASSESS_MODEL')! } : undefined,
   });
   return { output: r.output as AssessmentOutput, provider: r.provider, modelId: r.modelId, failures: r.failures };
 }

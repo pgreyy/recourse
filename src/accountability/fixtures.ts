@@ -220,7 +220,7 @@ export function buildFixtureMaterial(f: Fixture, now = new Date()): CaseMaterial
       captured_at: new Date(t),
       spent_before_cents: 0,
     },
-    paypal: { order: { description: `RCS-ANCHOR ${started.hash}`, custom_id: mandate.mandate_hash, invoice_id: orderRef, capture: { id: captureId, status: 'COMPLETED', amount: { value: line.price, currency_code: 'USD' } } }, read_error: null },
+    paypal: { order: { description: `RCS-ANCHOR ${started.hash}`, custom_id: mandate.mandate_hash, invoice_id: orderRef, capture: { id: captureId, status: 'COMPLETED', status_reason: null, amount: { value: line.price, currency_code: 'USD' } } }, read_error: null },
     recorder: { entries, checkpoints },
     snapshot: { id: `SNAP-${f.id}`, sha256_stored: snapSha, snapshot: snap },
     receipt: { status: f.receipt === 'CONFIRMED' ? 'CONFIRMED' : f.buyer_report ? 'ISSUE_REPORTED' : 'PENDING', acknowledgement_hash: ackHash },

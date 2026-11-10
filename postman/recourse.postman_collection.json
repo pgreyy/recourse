@@ -3545,7 +3545,7 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-                      "const r = pm.response.json(); console.log(r.status, r.document.verdict, r.document.liable_party, r.document.amount.value, '| appeal by', r.document.appeal_deadline);"
+                      "const r = pm.response.json(); pm.collectionVariables.set('ruling_id', r.ruling_id); if (r.obligation_id) pm.collectionVariables.set('obligation_id', r.obligation_id); console.log(r.status, r.document.verdict, r.document.liable_party, r.document.amount.value, '| appeal by', r.document.appeal_deadline);"
                     ]
                   }
                 }
@@ -3668,6 +3668,543 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Phase 5: Settlement",
+      "description": "Obligations from approved rulings, checked and executed on PayPal, confirmed by webhook.",
+      "item": [
+        {
+          "name": "5.1 Rulings: operator acceptance and appeals",
+          "description": "set ruling_id from 4.2 / Approve ruling. Operator acceptance waives the appeal and lets recovery run now.",
+          "item": [
+            {
+              "name": "Get ruling",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/rulings/{{ruling_id}}",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "rulings",
+                    "{{ruling_id}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Operator accepts the ruling (waives appeal)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.collectionVariables.set('obligation_id', pm.response.json().obligation_id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"accepted_by\": \"Acme Ops\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/rulings/{{ruling_id}}/operator-accept",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "rulings",
+                    "{{ruling_id}}",
+                    "operator-accept"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Operator appeals instead (within the window)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "pm.collectionVariables.set('appeal_id', pm.response.json().id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"note\": \"The buyer agreed to UK sizing in a chat with our support team.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/rulings/{{ruling_id}}/appeal",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "rulings",
+                    "{{ruling_id}}",
+                    "appeal"
+                  ]
+                },
+                "description": "Not possible after operator-accept. The note goes through the injection guard."
+              }
+            },
+            {
+              "name": "Decide appeal (UPHOLD or REVERSE)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"decision\": \"UPHOLD\",\n  \"decided_by\": \"Demo reviewer\",\n  \"note\": \"No record of the buyer agreeing to UK sizing.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/appeals/{{appeal_id}}/decide",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "appeals",
+                    "{{appeal_id}}",
+                    "decide"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.2 Settlement",
+          "description": "Execute runs the checks, then the PayPal actions. Each action is written before the PayPal call and confirmed by webhook (or reconcile).",
+          "item": [
+            {
+              "name": "Execute obligation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "console.log(r.result.status, '-', r.result.note);",
+                      "r.settlement.actions.forEach(a => console.log(a.action, a.status, a.confirmation, JSON.stringify(a.paypal_ids)));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/settlements/{{obligation_id}}/execute",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "settlements",
+                    "{{obligation_id}}",
+                    "execute"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get obligation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/settlements/{{obligation_id}}",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "settlements",
+                    "{{obligation_id}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Reconcile (confirm by GET if a webhook is late)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/settlements/{{obligation_id}}/reconcile",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "settlements",
+                    "{{obligation_id}}",
+                    "reconcile"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "List settlements",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/settlements",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "settlements"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Case settlement",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/cases/{{case_id}}/settlement",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "cases",
+                    "{{case_id}}",
+                    "settlement"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Operator exposure (used / remaining)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const e = pm.response.json(); console.log('used', e.used.value, 'remaining', e.remaining.value);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/operators/{{operator_id}}/exposure",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "operators",
+                    "{{operator_id}}",
+                    "exposure"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Phase 6: Reputation",
+      "description": "Agent reliability, operator accountability, merchant policy.",
+      "item": [
+        {
+          "name": "6.1 Reputation and merchant policy",
+          "description": "Only finalized rulings count. Policy: normal, step-up (1+ confirmed agent fault in 30 days) or suspended (3+).",
+          "item": [
+            {
+              "name": "Agent version reputation (Acme Shopper v1.3)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json(); console.log('reliability', r.reliability, 'policy', r.merchant_policy.policy, r.merchant_policy.reason || '');"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/agents/{{agent_v13_id}}/reputation",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "agents",
+                    "{{agent_v13_id}}",
+                    "reputation"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Operator reputation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json(); console.log('accountability', r.accountability, 'outstanding', JSON.stringify(r.outstanding_exposure));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/operators/{{operator_id}}/reputation",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "operators",
+                    "{{operator_id}}",
+                    "reputation"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Checkout as a step-up agent (expect 422 \"recent confirmed agent fault\")",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                      "pm.test('reputation step-up', () => pm.expect(pm.response.json().details.map(d => d.description)).to.include('recent confirmed agent fault'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mandate_id\": \"{{mandate_id}}\",\n  \"agent_version_id\": \"{{agent_v13_id}}\",\n  \"request_id\": \"stepup-{{case_ref}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{app_base_url}}/merchant-cart/{{cart_id}}/checkout",
+                  "host": [
+                    "{{app_base_url}}"
+                  ],
+                  "path": [
+                    "merchant-cart",
+                    "{{cart_id}}",
+                    "checkout"
+                  ]
+                },
+                "description": "Needs an ACTIVE mandate in mandate_id and a READY cart in cart_id (3.2 / Create cart). Nothing is charged."
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -3743,6 +4280,21 @@
     },
     {
       "key": "case_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ruling_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "obligation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "appeal_id",
       "value": "",
       "type": "string"
     },

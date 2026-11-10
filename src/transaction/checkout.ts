@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type pg from 'pg';
 import { createReceipt, receiptUrl } from '../accountability/receipts';
 import type { MandateSpec } from '../authorization/mandate-spec';
+import { merchantPolicy } from '../accountability/reputation';
 import { agentCoverage } from '../authorization/coverage';
 import { mandateUsage } from '../authorization/mandate-usage';
 import { loadMandate } from '../authorization/mandates.routes';
@@ -157,6 +158,7 @@ async function evaluate(req: { cartId: string; mandateId: string; requestId: str
   const merchantRow = (await db().query<{ id: string; name: string; delivery_days: number | null }>('SELECT id, name, delivery_days FROM merchants WHERE id = $1', [cart.merchant.id])).rows[0];
   const lines = firewallLines(cart, await substitutions(cart.case_ref, cart.id));
   const coverage = req.agentVersionId ? await agentCoverage(req.agentVersionId) : null;
+  const policy = req.agentVersionId ? await merchantPolicy(req.agentVersionId) : null;
   const firewall = runFirewall({
     spec,
     mandate_status: mandate.status,
@@ -169,6 +171,8 @@ async function evaluate(req: { cartId: string; mandateId: string; requestId: str
           agent_version_id: req.agentVersionId!,
           covered: coverage.covered,
           detail: coverage.covered ? `covered by ${coverage.operator_name}'s liability agreement v${coverage.agreement_version}` : coverage.reason,
+          policy: policy?.policy ?? 'normal',
+          policy_reason: policy?.reason ?? null,
         }
       : null,
     now: new Date(),
@@ -180,6 +184,7 @@ async function evaluate(req: { cartId: string; mandateId: string; requestId: str
     mandate_hash: mandate.mandate_hash?.trim() ?? null,
     agent_version_id: req.agentVersionId ?? null,
     agent_coverage: coverage,
+    merchant_policy: policy,
     catalog_snapshot_sha256: cart.catalog_snapshot.sha256,
     decision: firewall.decision,
     violations: firewall.violations,

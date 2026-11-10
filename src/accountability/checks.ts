@@ -28,8 +28,13 @@ export function codeChecks(m: CaseMaterial): CodeCheck[] {
     out.push(ok('paypal.custom_id', pp.custom_id === mandateHash, 'PayPal custom_id equals the mandate_hash', `PayPal custom_id is ${pp.custom_id}, mandate_hash is ${mandateHash}`));
     out.push(ok('paypal.invoice_id', pp.invoice_id === o.order_ref, `PayPal invoice_id equals order ref ${o.order_ref}`, `PayPal invoice_id is ${pp.invoice_id}, order ref is ${o.order_ref}`));
     const cap = pp.capture;
-    const amountOk = !!cap && cap.status === 'COMPLETED' && cap.amount.value === o.total_value && cap.amount.currency_code === o.currency;
-    out.push(ok('amount', amountOk, `captured ${o.total_value} ${o.currency} at PayPal (${cap?.id})`, `PayPal capture ${cap?.status ?? 'missing'} ${cap?.amount?.value ?? '?'} ${cap?.amount?.currency_code ?? '?'} vs order ${o.total_value} ${o.currency}`));
+    // A capture under dispute is held by PayPal (PENDING, reason BUYER_COMPLAINT) and a settled one may be
+    // refunded: those are real states, not tampering. Only a missing capture, a failed one or a different
+    // amount or currency fails this check.
+    const BAD = ['DECLINED', 'FAILED'];
+    const amountOk = !!cap && !BAD.includes(cap.status) && cap.amount.value === o.total_value && cap.amount.currency_code === o.currency;
+    const state = cap ? `${cap.status}${cap.status_reason ? ` (${cap.status_reason})` : ''}` : 'missing';
+    out.push(ok('amount', amountOk, `captured ${o.total_value} ${o.currency} at PayPal (${cap?.id}); capture now ${state}`, `PayPal capture ${state} ${cap?.amount?.value ?? '?'} ${cap?.amount?.currency_code ?? '?'} vs order ${o.total_value} ${o.currency}`));
   }
   const linesCents = o.lines.reduce((n, l) => n + Math.round(Number(l.price) * 100) * l.quantity, 0);
   out.push(ok('order.lines_total', linesCents === Math.round(Number(o.total_value) * 100), 'order lines add up to the total', `lines add up to ${(linesCents / 100).toFixed(2)}, total is ${o.total_value}`));

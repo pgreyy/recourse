@@ -88,7 +88,10 @@ export async function assessCase(cs: CaseRow, appeal = false) {
   const material = await loadCaseMaterial(cs);
   const r = await runPipeline(material, { appeal });
   const row = await storeAssessment({ caseId: cs.id, result: r, appeal });
-  await db().query('UPDATE cases SET status = $2, updated_at = now() WHERE id = $1', [cs.id, r.requires_human_review ? 'NEEDS_HUMAN_REVIEW' : 'ASSESSED']);
+  // A case that already has a ruling keeps its status; the new assessment is stored alongside.
+  if (!['RULING_APPROVED', 'APPEALED', 'CLOSED'].includes(cs.status)) {
+    await db().query('UPDATE cases SET status = $2, updated_at = now() WHERE id = $1', [cs.id, r.requires_human_review ? 'NEEDS_HUMAN_REVIEW' : 'ASSESSED']);
+  }
   await appendEntry(cs.case_ref, 'case.assessed', {
     case_id: cs.id,
     assessment_id: row.id,
@@ -227,6 +230,11 @@ export async function approveRuling(cs: CaseRow, approvedBy: { name: string; ema
     await c.query(`UPDATE cases SET status = 'RULING_APPROVED', updated_at = now() WHERE id = $1`, [cs.id]);
     await appendEntry(cs.case_ref, 'ruling.approved', { ruling_id: rows[0].id, case_id: cs.id, verdict: a.final_verdict, liable_party: doc.liable_party, document_hash: s.hash, signature: s.signature, approved_by: approvedBy }, c);
     return { ruling_id: rows[0].id, status: 'RULING_APPROVED', document: doc, document_hash: s.hash, signature: s.signature };
+  }).then(async (r) => {
+    // An approved ruling creates its settlement obligation (executed separately, after checks).
+    const { ensureObligation } = await import('../settlement/obligations');
+    const ob = doc.verdict === 'INCONCLUSIVE' ? null : await ensureObligation(r.ruling_id);
+    return { ...r, obligation_id: ob?.id ?? null };
   });
 }
 
