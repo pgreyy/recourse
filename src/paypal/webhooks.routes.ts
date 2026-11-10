@@ -1,4 +1,5 @@
 import express, { Router } from 'express';
+import { openCaseFromDispute } from '../accountability/cases';
 import { appendEntry } from '../evidence/recorder';
 import { env } from '../config';
 import { db } from '../shared/db/pool';
@@ -65,7 +66,9 @@ async function process(event: any) {
       order_ref: order?.order_ref ?? null,
     };
     if (order) await appendEntry(order.case_ref, 'paypal.dispute.read', { event_id: event.id, event_type: type, ...result });
-    return { result, orderId: order?.id };
+    // Workflow B: open (or find) the case for this dispute, from the re-read dispute, not the event body.
+    const cs = fresh.status === 200 && type !== 'CUSTOMER.DISPUTE.RESOLVED' ? await openCaseFromDispute(d) : null;
+    return { result: { ...result, case_id: cs?.id ?? null }, orderId: order?.id };
   }
   if (type === 'PAYMENT.CAPTURE.REFUNDED' || type.startsWith('PAYMENT.CAPTURE.')) {
     const captureId = res.links?.find((l: { rel: string }) => l.rel === 'up')?.href?.split('/').pop() ?? res.id;

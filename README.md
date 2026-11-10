@@ -8,8 +8,9 @@ operator agreed to in advance.
 Status: Phase 0 (PayPal sandbox probes, results in [docs/phase0-findings.md](docs/phase0-findings.md)),
 Phase 1 (authorization: signed mandates, operators, agents, liability agreements), Phase 2
 (merchant and evidence: Store Sync style cart, catalog snapshots, flight recorder), Phase 3 (agent
-runs, deterministic checkout firewall, PayPal checkout anchored to the recorder) and Phase 3b
-(ratification receipt).
+runs, deterministic checkout firewall, PayPal checkout anchored to the recorder), Phase 3b
+(ratification receipt) and Phase 4 (accountability: cases, code checks, AI assessment validated in
+code, rulings, scorecard).
 
 ## Setup
 
@@ -40,7 +41,7 @@ API key for one LLM provider (Gemini, OpenAI or Anthropic).
 Then import `postman/recourse.postman_collection.json` into Postman and follow
 [docs/phase1-2-checks.md](docs/phase1-2-checks.md).
 
-## API (Phases 1 to 3b)
+## API (Phases 1 to 4)
 
 One Express app, organised as modules: `authorization`, `transaction`, `evidence`, `accountability`,
 `settlement`, plus `paypal` (the one PayPal adapter, shared with the probes) and `shared`.
@@ -64,7 +65,12 @@ One Express app, organised as modules: `authorization`, `transaction`, `evidence
 | `GET /orders/:ref` | An order with its PayPal ids and anchor check |
 | `POST /agent/run`, `GET /agent/runs/:id`, `GET /agent/versions` | Run an agent version under a mandate (tool loop: search, cart, checkout; every step recorded). `dry_run: true` stops before PayPal; agents without an accepted operator liability agreement always get `STEP_UP_REQUIRED` |
 | `GET /r/:token`, `POST /r/:token/confirm`, `POST /r/:token/report` | Ratification receipt page (signed link): confirm (signed acknowledgement) or report an issue (opens a case) |
-| `POST /webhooks/paypal` | PayPal webhooks: signature verified, deduped by event id, disputes re-read |
+| `POST /webhooks/paypal` | PayPal webhooks: signature verified, deduped by event id, disputes re-read; a dispute on one of our orders opens a case |
+| `POST /cases`, `GET /cases`, `GET /cases/:id`, `GET /cases/:id/evidence`, `GET /cases/:id/verify` | Cases (buyer reports and PayPal disputes), their evidence pack and code checks |
+| `POST /cases/:id/assess` | Code checks, counterfactual and injection scan, then one model call, then validation in code |
+| `POST /cases/:id/operator-statement` | Operator text on a case, kept as untrusted evidence and flagged if it reads like instructions |
+| `POST /cases/:id/approve` | Signed ruling from a validated assessment (no money moves) |
+| `POST /scorecard/run`, `GET /scorecard` | 24 labelled fixture cases through the same pipeline; accuracy, false AGENT_FAULT rate, INCONCLUSIVE rate |
 | `GET /catalog-snapshots/:id` | A stored catalog snapshot, re-hashed |
 | `POST /recorder/:case_ref/entries`, `GET /recorder/:case_ref`, `GET /recorder/:case_ref/verify` | Flight recorder: hash chain with signed checkpoints |
 | `GET /.well-known/recourse-signing-key` | Public key for mandates, agreement acceptances and checkpoints |

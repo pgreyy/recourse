@@ -33,7 +33,7 @@ export type Checkpoint = {
   signature: string;
 };
 
-function hashedBody(e: { case_ref: string; seq: number; kind: string; recorded_at: string; payload: unknown }) {
+export function hashedBody(e: { case_ref: string; seq: number; kind: string; recorded_at: string; payload: unknown }) {
   return { case_ref: e.case_ref, seq: e.seq, kind: e.kind, recorded_at: e.recorded_at, payload: e.payload };
 }
 
@@ -41,7 +41,7 @@ export function entryHash(prevHash: string, body: ReturnType<typeof hashedBody>)
   return sha256Hex(prevHash + canonicalize(body));
 }
 
-function checkpointDocument(cp: { case_ref: string; seq: number; head_hash: string; signed_at: Date; signing_key_id: string }) {
+export function checkpointDocument(cp: { case_ref: string; seq: number; head_hash: string; signed_at: Date; signing_key_id: string }) {
   return {
     type: 'recourse.recorder_checkpoint',
     case_ref: cp.case_ref,

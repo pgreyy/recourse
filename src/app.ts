@@ -1,5 +1,7 @@
 import express from 'express';
+import { cases } from './accountability/cases.routes';
 import { receipts } from './accountability/receipts.routes';
+import { scorecard } from './accountability/scorecard';
 import { agents } from './authorization/agents.routes';
 import { mandates } from './authorization/mandates.routes';
 import { operators } from './authorization/operators.routes';
@@ -51,6 +53,8 @@ export function createApp() {
   app.use('/agent', agentRoutes);
   // accountability
   app.use('/r', receipts);
+  app.use('/cases', cases);
+  app.use('/scorecard', scorecard);
   // evidence
   app.use('/recorder', recorder);
   app.use('/catalog-snapshots', snapshots);

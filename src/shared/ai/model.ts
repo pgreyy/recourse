@@ -119,6 +119,8 @@ export async function generateObjectWithFallback<S extends z.ZodType>(opts: {
   prompt: string;
   schema: S;
   timeoutMs?: number;
+  /** Reasoning effort for OpenAI reasoning models (default: the candidate's, i.e. minimal). */
+  openaiEffort?: 'minimal' | 'low' | 'medium';
 }): Promise<ObjectResult<z.infer<S>>> {
   const r = await runWithFallback(opts.task, async (c) => {
     const result = await generateText({
@@ -128,7 +130,8 @@ export async function generateObjectWithFallback<S extends z.ZodType>(opts: {
       output: Output.object({ schema: opts.schema }),
       maxRetries: 1,
       abortSignal: AbortSignal.timeout(opts.timeoutMs ?? 40_000),
-      providerOptions: c.providerOptions,
+      providerOptions:
+        opts.openaiEffort && c.provider === 'openai' && c.providerOptions ? { openai: { ...c.providerOptions.openai, reasoningEffort: opts.openaiEffort } } : c.providerOptions,
     });
     return result.output as z.infer<S>;
   });
