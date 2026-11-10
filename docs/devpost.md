@@ -60,8 +60,11 @@ step-up, and its next checkout returned 422 with nothing charged.
 - Settlement: pre-checks (ruling approved, operator accepted or appeal window over, agreement covers the agent version,
   caps), the intent stored before each PayPal call, an idempotency key as `PayPal-Request-Id`, reconciliation of
   uncertain outcomes, and RECOVERED only once PayPal confirms by webhook or re-read.
-- Scorecard: 24 labelled cases through the same pipeline. gpt-5-mini: 23 of 24 correct, 0% false AGENT_FAULT,
-  16.7% INCONCLUSIVE. gpt-5-nano: 23 of 24, 0%, 25.0%.
+- Scorecard: 24 labelled cases through the same pipeline (prompt hash `223ccdc1e547`). gpt-5-mini: 23 of 24 correct,
+  0% false AGENT_FAULT, 16.7% INCONCLUSIVE. gpt-5-nano: 24 of 24, 0%, 20.8%. One run each.
+- The Clerk may state money facts only from its tool results: a server check compares every amount, PayPal id and
+  refund claim in an answer with the tool output of that answer, asks for one rewrite, and otherwise shows the
+  recorded settlement facts. Three check questions and the real answers are in `docs/clerk-checks.md`.
 - A live PayPal dispute (`PP-R-MSF-10198047`) opened a case through the webhook, was assessed as buyer's remorse,
   escalated, and answered with a two page evidence PDF (`provide-evidence`, HTTP 200, debug id `f500488ac13f0`).
 

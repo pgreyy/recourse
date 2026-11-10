@@ -339,6 +339,7 @@ export async function settlementView(obligationId: string, live = false) {
   if (!ob) throw new HttpError(404, 'RESOURCE_NOT_FOUND', `Obligation ${obligationId} not found`);
   const actions = (await db().query('SELECT * FROM settlement_actions WHERE obligation_id = $1 ORDER BY created_at', [obligationId])).rows;
   const cs = (await db().query('SELECT case_ref, dispute_id FROM cases WHERE id = $1', [ob.case_id])).rows[0];
+  const operator = ob.operator_id ? ((await db().query<{ name: string }>('SELECT name FROM operators WHERE id = $1', [ob.operator_id])).rows[0]?.name ?? null) : null;
   let paypalDispute = null;
   if (live && ob.workflow === 'B' && cs.dispute_id) {
     const d = await getDispute(cs.dispute_id);
@@ -349,6 +350,7 @@ export async function settlementView(obligationId: string, live = false) {
     ruling_id: ob.ruling_id,
     case_id: ob.case_id,
     case_ref: cs.case_ref,
+    operator,
     kind: ob.kind,
     workflow: ob.workflow,
     verdict: ob.verdict,
