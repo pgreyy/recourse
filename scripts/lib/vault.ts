@@ -1,4 +1,6 @@
 import {
+  ExperienceContextShippingPreference,
+  VaultUserAction,
   PaypalPaymentTokenCustomerType,
   PaypalPaymentTokenUsageType,
   UsagePattern,
@@ -37,6 +39,9 @@ export async function createPaypalSetupToken(who: Role): Promise<void> {
             permitMultiplePaymentTokens: false,
             experienceContext: {
               brandName: 'Recourse',
+              locale: 'en-US',
+              shippingPreference: ExperienceContextShippingPreference.NoShipping,
+              userAction: VaultUserAction.Continue,
               returnUrl: env('RETURN_URL', `http://localhost:${port}/return`),
               cancelUrl: env('CANCEL_URL', `http://localhost:${port}/cancel`),
             },

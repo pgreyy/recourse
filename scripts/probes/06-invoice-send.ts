@@ -10,9 +10,10 @@ const caseRef = `RCS-CASE-TEST-${Date.now()}`;
 
 const next = show(
   'POST /v2/invoicing/generate-next-invoice-number',
-  await pp('POST', '/v2/invoicing/generate-next-invoice-number'),
+  await pp('POST', '/v2/invoicing/generate-next-invoice-number', { json: {} }),
 );
-const invoiceNumber: string = next.body?.invoice_number ?? caseRef;
+// invoice_number must be under 25 characters.
+const invoiceNumber: string = next.body?.invoice_number ?? `RCS-${Date.now().toString(36)}`;
 
 const created = show(
   'POST /v2/invoicing/invoices',

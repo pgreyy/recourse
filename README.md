@@ -27,7 +27,9 @@ Every probe prints PayPal's full response and appends it to `.local/logs/probes.
 | 2a | `npx tsx scripts/probes/02a-vault-setup-token.ts` | PayPal setup token, prints the approve link |
 | 2b | `npx tsx scripts/probes/02b-vault-payment-token.ts` | Approved setup token to payment token, prints `vault_id` |
 | 2c | `npx tsx scripts/probes/02c-vault-card-fallback.ts` | Fallback: vault a sandbox test card |
+| 2d | `npx tsx scripts/probes/02d-vault-with-purchase.ts` | Fallback: save PayPal during a purchase (`store_in_vault`) |
 | 3 | `npx tsx scripts/probes/03-order-vault-capture.ts` | Order with `vault_id`, payer not present; capture; check `custom_id` |
+| 3b | `npx tsx scripts/probes/03b-order-buyer-present.ts` | Fallback: buyer-approved order, same `custom_id` check |
 | 4a | `npx tsx scripts/probes/04a-dispute-create.ts` | Sandbox dispute as the buyer |
 | 4b | `npx tsx scripts/probes/04b-dispute-get.ts` | Dispute status and every HATEOAS link |
 | 4c | `npx tsx scripts/probes/04c-dispute-action.ts <rel>` | Run one dispute action, show the new status and links |

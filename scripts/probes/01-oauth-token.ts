@@ -9,7 +9,7 @@ if (res.status === 200) {
   console.log(`expires_in: ${res.body.expires_in}s`);
   console.log('scopes:');
   for (const s of String(res.body.scope ?? '').split(' ').sort()) console.log(`  ${s}`);
-  const want = ['disputes', 'invoicing', 'vault', 'notifications/webhooks'];
+  const want = ['disputes/create', 'invoicing', 'vault/payment-tokens/readwrite', 'applications/webhooks'];
   console.log('\nScope check (substring match):');
   for (const w of want) console.log(`  ${w.padEnd(24)} ${String(res.body.scope).includes(w) ? 'present' : 'NOT PRESENT'}`);
 }

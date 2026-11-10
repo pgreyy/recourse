@@ -1,8 +1,8 @@
 // Probe 5: tiny webhook receiver. Logs every event to the console and .local/webhook-events.jsonl,
 // and verifies the signature with POST /v1/notifications/verify-webhook-signature.
 //
-// Events sent by the dashboard's Webhooks Simulator cannot be verified (PayPal says so), so a FAILURE
-// is rejected with 401 unless WEBHOOK_ALLOW_UNVERIFIED=1 (set that only while using the simulator).
+// A FAILURE is rejected with 401 unless WEBHOOK_ALLOW_UNVERIFIED=1. Observed 2026-11-10: events sent with
+// POST /v1/notifications/simulate-event for our webhook_id verified SUCCESS; the dashboard simulator may not.
 // Also serves /return and /cancel for the vault approval redirect (probe 2a).
 //
 // Usage: npx tsx scripts/probes/05-webhook-server.ts   (PORT, default 8787)

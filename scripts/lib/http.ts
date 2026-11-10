@@ -10,6 +10,28 @@ function headersToObject(h: Headers): Record<string, string> {
   return out;
 }
 
+/** DNS and connection errors seen in WSL; safe to retry because every create call sends a PayPal-Request-Id. */
+export const RETRYABLE = new Set(['ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'UND_ERR_CONNECT_TIMEOUT']);
+
+/** fetch with retries on network errors. Prints only the error code, never the request (it holds credentials). */
+async function safeFetch(url: string | URL, init: RequestInit, label: string): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(url, init);
+    } catch (e) {
+      const err = e as { cause?: { code?: string }; code?: string };
+      const code = err.cause?.code ?? err.code ?? 'UNKNOWN';
+      if (RETRYABLE.has(code) && attempt < 8) {
+        console.error(`${label}: network error ${code}, retrying (${attempt}/8)`);
+        await new Promise((ok) => setTimeout(ok, 2000 * attempt));
+        continue;
+      }
+      console.error(`${label}: network error ${code}`);
+      process.exit(1);
+    }
+  }
+}
+
 async function toResponse(res: Response): Promise<PPResponse> {
   const headers = headersToObject(res.headers);
   return { status: res.status, debugId: headers['paypal-debug-id'], headers, body: parseBody(await res.text()) };
@@ -18,15 +40,19 @@ async function toResponse(res: Response): Promise<PPResponse> {
 /** POST /v1/oauth2/token with client credentials. */
 export async function requestToken(): Promise<PPResponse> {
   const basic = Buffer.from(`${need('PAYPAL_CLIENT_ID')}:${need('PAYPAL_CLIENT_SECRET')}`).toString('base64');
-  const res = await fetch(`${API_BASE}/v1/oauth2/token`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${basic}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Accept: 'application/json',
+  const res = await safeFetch(
+    `${API_BASE}/v1/oauth2/token`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${basic}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: 'grant_type=client_credentials',
     },
-    body: 'grant_type=client_credentials',
-  });
+    'POST /v1/oauth2/token',
+  );
   return toResponse(res);
 }
 
@@ -69,7 +95,10 @@ export type CallOptions = {
 /** Authenticated call to the sandbox. `path` may be a full href taken from a HATEOAS link. */
 export async function pp(method: string, path: string, opts: CallOptions = {}): Promise<PPResponse> {
   const url = new URL(path.startsWith('http') ? path : `${API_BASE}${path}`);
-  if (!url.href.startsWith(API_BASE)) throw new Error(`Refusing non-sandbox URL: ${url.href}`);
+  // HATEOAS links come back on api.sandbox.paypal.com; both hosts are sandbox. Anything else is refused.
+  if (!['api-m.sandbox.paypal.com', 'api.sandbox.paypal.com'].includes(url.hostname) || url.protocol !== 'https:') {
+    throw new Error(`Refusing non-sandbox URL: ${url.href}`);
+  }
   for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined) url.searchParams.set(k, v);
 
   const headers: Record<string, string> = {
@@ -86,7 +115,7 @@ export async function pp(method: string, path: string, opts: CallOptions = {}): 
     body = JSON.stringify(opts.json);
     headers['Content-Type'] = 'application/json';
   }
-  const res = await fetch(url, { method, headers, body });
+  const res = await safeFetch(url, { method, headers, body }, `${method} ${url.pathname}`);
   return toResponse(res);
 }
 

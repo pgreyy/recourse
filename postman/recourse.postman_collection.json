@@ -456,12 +456,128 @@
               ]
             }
           }
+        },
+        {
+          "name": "Fallback: save PayPal with purchase (store_in_vault)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code < 300) { const v = pm.response.json().id; if (v) pm.collectionVariables.set('order_id', v); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "PayPal-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": \"CAPTURE\",\n  \"purchase_units\": [\n    {\n      \"reference_id\": \"default\",\n      \"amount\": {\n        \"currency_code\": \"{{currency}}\",\n        \"value\": \"10.00\"\n      }\n    }\n  ],\n  \"payment_source\": {\n    \"paypal\": {\n      \"experience_context\": {\n        \"brand_name\": \"Recourse\",\n        \"shipping_preference\": \"NO_SHIPPING\",\n        \"user_action\": \"PAY_NOW\",\n        \"return_url\": \"{{return_url}}\",\n        \"cancel_url\": \"{{cancel_url}}\"\n      },\n      \"attributes\": {\n        \"vault\": {\n          \"store_in_vault\": \"ON_SUCCESS\",\n          \"usage_type\": \"MERCHANT\",\n          \"customer_type\": \"CONSUMER\"\n        }\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v2/checkout/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v2",
+                "checkout",
+                "orders"
+              ]
+            },
+            "description": "Approve via the payer-action link, then run Capture order; the vault id is in payment_source.paypal.attributes.vault.id."
+          }
+        },
+        {
+          "name": "Fallback: buyer-present order (no vault)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const mandate = JSON.stringify({kind:'recourse.test-mandate', created:new Date().toISOString(), amount:{currency_code:pm.collectionVariables.get('currency'), value:'25.00'}});",
+                  "pm.collectionVariables.set('custom_id', CryptoJS.SHA256(mandate).toString());",
+                  "pm.collectionVariables.set('invoice_ref', 'RCS-TEST-' + Date.now());",
+                  "pm.collectionVariables.set('request_id', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code < 300) { const v = pm.response.json().id; if (v) pm.collectionVariables.set('order_id', v); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "PayPal-Request-Id",
+                "value": "{{request_id}}"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": \"CAPTURE\",\n  \"purchase_units\": [\n    {\n      \"reference_id\": \"default\",\n      \"custom_id\": \"{{custom_id}}\",\n      \"invoice_id\": \"{{invoice_ref}}\",\n      \"amount\": {\n        \"currency_code\": \"{{currency}}\",\n        \"value\": \"25.00\"\n      }\n    }\n  ],\n  \"payment_source\": {\n    \"paypal\": {\n      \"experience_context\": {\n        \"brand_name\": \"Recourse\",\n        \"shipping_preference\": \"NO_SHIPPING\",\n        \"user_action\": \"PAY_NOW\",\n        \"return_url\": \"{{return_url}}\",\n        \"cancel_url\": \"{{cancel_url}}\"\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v2/checkout/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v2",
+                "checkout",
+                "orders"
+              ]
+            },
+            "description": "Approve via the payer-action link, then run Capture order."
+          }
         }
       ]
     },
     {
       "name": "4 Disputes",
-      "description": "Probe 4. Create is sandbox only and acts as the buyer through an unsigned PayPal-Auth-Assertion JWT. require-evidence and adjudicate are sandbox only.",
+      "description": "Probe 4. Create is sandbox only and acts as the buyer through an unsigned PayPal-Auth-Assertion JWT; without buyer consent it returns 400 \"No permissions to set target_client_id\" (see docs/phase0-findings.md). require-evidence and adjudicate are sandbox only and were not offered on a Resolution Center dispute.",
       "item": [
         {
           "name": "Create dispute (sandbox, as buyer)",
@@ -616,7 +732,7 @@
               "formdata": [
                 {
                   "key": "input",
-                  "value": "{\n  \"evidences\": [\n    {\n      \"evidence_type\": \"PROOF_OF_FULFILLMENT\",\n      \"notes\": \"Signed mandate and receipt attached.\"\n    }\n  ]\n}",
+                  "value": "{\n  \"evidences\": [\n    {\n      \"evidence_type\": \"ITEM_DESCRIPTION\",\n      \"notes\": \"Signed mandate and receipt attached.\"\n    }\n  ]\n}",
                   "type": "text",
                   "contentType": "application/json"
                 }

@@ -156,11 +156,66 @@ const folders: Array<{ name: string; description: string; items: Req[] }> = [
         ],
       },
       { name: 'Get capture', method: 'GET', path: '/v2/payments/captures/{{capture_id}}' },
+      {
+        name: 'Fallback: save PayPal with purchase (store_in_vault)',
+        method: 'POST',
+        path: '/v2/checkout/orders',
+        headers: { 'PayPal-Request-Id': '{{$guid}}', Prefer: 'return=representation' },
+        body: {
+          intent: 'CAPTURE',
+          purchase_units: [{ reference_id: 'default', amount: { currency_code: ccy, value: '10.00' } }],
+          payment_source: {
+            paypal: {
+              experience_context: {
+                brand_name: 'Recourse',
+                shipping_preference: 'NO_SHIPPING',
+                user_action: 'PAY_NOW',
+                return_url: '{{return_url}}',
+                cancel_url: '{{cancel_url}}',
+              },
+              attributes: { vault: { store_in_vault: 'ON_SUCCESS', usage_type: 'MERCHANT', customer_type: 'CONSUMER' } },
+            },
+          },
+        },
+        test: [save('order_id', 'pm.response.json().id')],
+        description: 'Approve via the payer-action link, then run Capture order; the vault id is in payment_source.paypal.attributes.vault.id.',
+      },
+      {
+        name: 'Fallback: buyer-present order (no vault)',
+        method: 'POST',
+        path: '/v2/checkout/orders',
+        headers: { 'PayPal-Request-Id': '{{request_id}}', Prefer: 'return=representation' },
+        prerequest: mandateHash(''),
+        body: {
+          intent: 'CAPTURE',
+          purchase_units: [
+            {
+              reference_id: 'default',
+              custom_id: '{{custom_id}}',
+              invoice_id: '{{invoice_ref}}',
+              amount: { currency_code: ccy, value: '25.00' },
+            },
+          ],
+          payment_source: {
+            paypal: {
+              experience_context: {
+                brand_name: 'Recourse',
+                shipping_preference: 'NO_SHIPPING',
+                user_action: 'PAY_NOW',
+                return_url: '{{return_url}}',
+                cancel_url: '{{cancel_url}}',
+              },
+            },
+          },
+        },
+        test: [save('order_id', 'pm.response.json().id')],
+        description: 'Approve via the payer-action link, then run Capture order.',
+      },
     ],
   },
   {
     name: '4 Disputes',
-    description: 'Probe 4. Create is sandbox only and acts as the buyer through an unsigned PayPal-Auth-Assertion JWT. require-evidence and adjudicate are sandbox only.',
+    description: 'Probe 4. Create is sandbox only and acts as the buyer through an unsigned PayPal-Auth-Assertion JWT; without buyer consent it returns 400 "No permissions to set target_client_id" (see docs/phase0-findings.md). require-evidence and adjudicate are sandbox only and were not offered on a Resolution Center dispute.',
     items: [
       {
         name: 'Create dispute (sandbox, as buyer)',
@@ -203,7 +258,7 @@ const folders: Array<{ name: string; description: string; items: Req[] }> = [
           {
             key: 'input',
             contentType: 'application/json',
-            value: json({ evidences: [{ evidence_type: 'PROOF_OF_FULFILLMENT', notes: 'Signed mandate and receipt attached.' }] }),
+            value: json({ evidences: [{ evidence_type: 'ITEM_DESCRIPTION', notes: 'Signed mandate and receipt attached.' }] }),
           },
         ],
         description: 'Add a file part named evidence-file (PDF/PNG/JPG/GIF) in the Body tab.',
