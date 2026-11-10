@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, ErrorNote, Id, Link, Modal, money, navigate, Status, short, useLoad, useLocation, when, maskEmail, Notice } from '../lib';
+import { api, ErrorNote, Id, Link, Modal, money, navigate, Status, short, useLoad, useLocation, when, maskEmail, Notice, BackButton } from '../lib';
 
 type Agreement = {
   id: string;
@@ -21,6 +21,7 @@ export function Operator() {
     <main className="page">
       <div className="page-head">
         <div>
+          <BackButton />
           <h1>Operator onboarding</h1>
           <p>
             An agent operator signs a liability agreement before its agents shop. It sets how much Recourse may recover from the operator when its agent breaks a

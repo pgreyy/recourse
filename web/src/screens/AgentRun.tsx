@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, ErrorNote, Id, Link, money, navigate, Status, useLoad, useLocation, when, type Tone } from '../lib';
+import { api, ErrorNote, Id, Link, money, navigate, Status, useLoad, useLocation, when, type Tone, BackButton } from '../lib';
 import { Timeline, type Entry } from '../timeline';
 
 type RunView = {
@@ -41,6 +41,7 @@ export function AgentRun() {
     <main className="page">
       <div className="page-head">
         <div>
+          <BackButton />
           <h1>Agent run</h1>
           <p>Pick an agent version and signed buyer instructions, then watch every step it takes. Each step is written to a hash-chained flight recorder, and the chain is anchored in the PayPal order at checkout.</p>
         </div>

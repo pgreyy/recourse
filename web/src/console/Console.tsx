@@ -2,7 +2,7 @@ import { AgStudio, AgStudioProvider, createWidgets } from 'ag-studio-react';
 import { AgStudioAiModule, createAiHarness, studioTheme, type AgAiHarness, type AgDataSourcesDefinition, type AgStudioApiReadyEvent } from 'ag-studio';
 import { AllEnterpriseModule, ModuleRegistry } from 'ag-grid-enterprise';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, ErrorNote, navigate, useLocation, verdictLabel } from '../lib';
+import { api, ErrorNote, navigate, useLocation, verdictLabel, BackButton } from '../lib';
 import { nextStep } from './Overview';
 import { clerkAgent, CLERK_STARTERS } from './clerk';
 import { ClerkPanel } from './ClerkPanel';
@@ -290,6 +290,7 @@ export function Console() {
       <div className="console-main">
         <header className="page-head console-head">
           <div>
+            <BackButton />
             <h1>{HEAD[page].title}</h1>
             <p>{HEAD[page].purpose}</p>
           </div>

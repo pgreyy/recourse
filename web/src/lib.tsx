@@ -47,7 +47,9 @@ const notify = () => listeners.forEach((l) => l());
 window.addEventListener('popstate', notify);
 
 export function navigate(to: string) {
-  history.pushState(null, '', to.startsWith('/app') ? to : `/app${to}`);
+  // depth counts in-app steps in this tab, so Back knows whether the previous page is part of Recourse.
+  const depth = ((history.state as { depth?: number } | null)?.depth ?? 0) + 1;
+  history.pushState({ depth }, '', to.startsWith('/app') ? to : `/app${to}`);
   notify();
   window.scrollTo(0, 0);
 }
@@ -120,6 +122,28 @@ export function Id({ children, title }: { children: ReactNode; title?: string })
     <span className="idv" title={title}>
       {children}
     </span>
+  );
+}
+
+/** Back to the previous page; to home when there is no earlier page in this tab. */
+export function BackButton() {
+  return (
+    <button
+      type="button"
+      className="back-btn"
+      aria-label="Back"
+      onClick={() => {
+        // Back within Recourse; if this tab has no earlier Recourse page, go home instead of leaving the app.
+        const fromApp = ((window.history.state as { depth?: number } | null)?.depth ?? 0) > 0 || (document.referrer !== '' && new URL(document.referrer).origin === location.origin);
+        if (fromApp && window.history.length > 1) window.history.back();
+        else navigate('/');
+      }}
+    >
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M15 5l-7 7 7 7" />
+      </svg>
+      Back
+    </button>
   );
 }
 

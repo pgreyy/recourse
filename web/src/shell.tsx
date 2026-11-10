@@ -160,7 +160,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </nav>
         <div className="sb-bottom">
           <ul>
-            {item({ key: '/judges', to: '/judges', label: 'Demo guide', icon: Icons.judges }, section === '/judges')}
+            {item({ key: '/judges', to: '/judges', label: 'Demo guide (for judges)', icon: Icons.judges }, section === '/judges')}
             <li>
               <button type="button" className="sb-item" aria-pressed={clerkOpen} onClick={askClerk}>
                 <span className="sb-ico">

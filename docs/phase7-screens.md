@@ -34,10 +34,10 @@ answers on that copy. Neon itself holds the clean demo (no cases). The scorecard
   signal colour (oxide red) for warnings and faults. Fraunces for headings and the wordmark, IBM Plex
   Sans for text, IBM Plex Mono for ids, hashes and amounts; tabular figures everywhere. The same palette
   themes AG Studio (`studioTheme.withParams`) and AG Grid (`studioGridTheme.withParams`).
-- The mark is a notched seal with a return arrow ([logo-options.md](logo-options.md)); it is also the
+- The mark is a notched seal with a return arrow (`web/src/brand.tsx`); it is also the
   favicon and the receipt's header.
 - One collapsible sidebar holds all navigation: Walkthrough (1 Operator, 2 Buyer, 3 Agent run), Console
-  (Overview, Cases, Case detail, Agents and operators, Settlements, Scorecard), then Demo guide, Ask the
+  (Overview, Cases, Case detail, Agents and operators, Settlements, Scorecard), then Demo guide (for judges), Ask the
   Clerk and the PayPal sandbox marker. Expanded 248 px: the mark and wordmark, with a collapse icon at
   the right of the same row. Collapsed 64 px: icons with a label on hover or focus, and the mark itself
   is the expand button (on hover or focus it shows the expand icon). Both toggles are buttons with

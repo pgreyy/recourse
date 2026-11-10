@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { api, Link, useLoad, Notice } from '../lib';
+import { api, Link, useLoad, Notice, BackButton } from '../lib';
 
 type Login = { email: string; password: string | null } | null;
 type JudgeInfo = { buyer: Login; operator: Login; limits: { ai_calls: { limit: number; used: number; remaining: number }; agent_runs_per_ip_per_hour: number } };
@@ -12,7 +12,8 @@ export function Judges() {
     <main className="page" style={{ maxWidth: 980 }}>
       <div className="page-head">
         <div>
-          <h1>Demo guide</h1>
+          <BackButton />
+          <h1>Demo guide (for judges)</h1>
           <p>
             Recourse is the liability layer for agentic commerce. A buyer signs instructions, an AI agent shops under them, and every decision the agent makes is
             recorded and anchored in the PayPal order. When the purchase goes wrong, Recourse works out who is responsible and the agent's operator pays,

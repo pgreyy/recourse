@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, ErrorNote, Id, money, navigate, Status, short, useLoad, useLocation, when, type Tone, maskEmail, plural } from '../lib';
+import { api, ErrorNote, Id, money, navigate, Status, short, useLoad, useLocation, when, type Tone, maskEmail, plural, BackButton } from '../lib';
 
 const EXAMPLE = "Running shoes, US men's 10, under $120, Kestrel or Sorin, by Friday";
 
@@ -42,6 +42,7 @@ export function Buyer() {
     <main className="page">
       <div className="page-head">
         <div>
+          <BackButton />
           <h1>Buyer instructions</h1>
           <p>Say what the agent may buy, in plain English. Recourse compiles it into rules, and the agent can only buy within them. Approve once with PayPal; Recourse signs the rules.</p>
         </div>
