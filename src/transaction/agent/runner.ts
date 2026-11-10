@@ -126,13 +126,17 @@ function buildTools(state: RunState) {
       state.travel
         ? `Search ${state.merchant.name} hotel rates. Returns each rate with its structured stay data (hotel, stars, city, check_in, check_out, nights, and refund_policy when the hotel gives one), the total price with taxes, and descriptions. Availability is not shown here: it is confirmed when a rate is added to a cart.`
         : `Search ${state.merchant.name} listings. Returns listings with every variant: structured attributes (size, unit_system, gender), price and descriptions. Stock is not shown here: availability is confirmed when items are added to a cart.`,
-      z.object({
-        reasoning,
-        brands: z.array(z.string()).optional().describe('Only these brands'),
-        max_price: z.string().optional().describe('Highest unit price, e.g. "120.00"'),
-      }),
-      ({ reasoning: why, ...input }) =>
-        guard('search_catalog', why, input, async (done) => {
+      // Hotels have no brand filter: a stray filter (e.g. "4-star" as a brand) would hide every rate.
+      state.travel
+        ? z.object({ reasoning, max_price: z.string().optional().describe('Highest total price, e.g. "400.00"') })
+        : z.object({
+            reasoning,
+            brands: z.array(z.string()).optional().describe('Only these brands'),
+            max_price: z.string().optional().describe('Highest unit price, e.g. "120.00"'),
+          }),
+      ({ reasoning: why, ...rest }) => {
+        const input = rest as { brands?: string[]; max_price?: string };
+        return guard('search_catalog', why, input, async (done) => {
           if (state.searched) {
             const again = { ...(state.searched as object), note: 'Same results as your earlier search. Use them: pick a listing and create a cart.' };
             await done({ repeated: true });
@@ -159,9 +163,11 @@ function buildTools(state: RunState) {
           // Like a merchant catalog feed: listings and prices, no live stock (the cart confirms availability).
           const result = { catalog_snapshot_sha256: snap.sha256, catalog_version: snap.catalog_version, delivery_days: snap.snapshot.merchant.delivery_days, listings };
           await done({ listings: listings.map((l) => ({ listing_id: l.listing_id, variants: l.variants.length })) }, snap.sha256);
-          state.searched = result;
+          // Only a search that found something is reused; an empty one may be retried with other filters.
+          if (listings.length) state.searched = result;
           return result;
-        }),
+        });
+      },
     ),
     create_cart: checked(
       'create_cart',
