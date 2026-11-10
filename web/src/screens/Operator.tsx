@@ -24,7 +24,7 @@ export function Operator() {
           <h1>Operator onboarding</h1>
           <p>
             An agent operator signs a liability agreement before its agents shop. It sets how much Recourse may recover from the operator when its agent breaks a
-            buyer's mandate, and how the operator can appeal.
+            buyer's instructions, and how the operator can appeal.
           </p>
         </div>
         {ops.data && (

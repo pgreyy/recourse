@@ -1,4 +1,4 @@
-import { fixPlural } from '../shared/words';
+import { fixPlural, instructionWords } from '../shared/words';
 import { isKnownVariant, itemWords, verdictWords } from './timeline';
 
 /** Clause ids as words ("attribute.size" is "the size clause"). */
@@ -22,7 +22,7 @@ const FIELD: Array<[RegExp, string]> = [
   [/\bcited_entries\b/gi, 'cited steps'],
   [/\bcode_status\b/gi, 'code result'],
   [/\bagent_fault_definition\b/gi, 'agent-fault definition'],
-  [/\bmandate\.clauses\b/gi, "the mandate's clauses"],
+  [/\bmandate\.clauses\b/gi, "the clauses of the instructions"],
   [/\b(?:unit_system|size_system)\s*(?:=|:|is)?\s*null\b/gi, 'no size system'],
   [/\b(?:unit_system|size_system)\b/gi, 'size system'],
 ];
@@ -61,6 +61,7 @@ export function plainText(text: string | null | undefined): string | null {
   // Anything else written like a field name: underscores to spaces.
   s = s.replace(/\b([a-z]+)_([a-z_]+)\b/g, (m) => m.replace(/_/g, ' '));
   s = s.replace(/\bAND\b/g, 'and');
+  s = instructionWords(s);
   // A sentence that now starts in lower case.
   s = s.replace(/(^|[.!?]\s+)([a-z])/g, (_m, a: string, b: string) => a + b.toUpperCase());
   return s.replace(/\s{2,}/g, ' ');

@@ -21,7 +21,7 @@ const def = (id: string, label: string, comp: any, description: string, size = {
 });
 
 export const WIDGETS = [
-  def('rc-attention', 'Needs a decision', AttentionList, 'Cases waiting for a human: assessment, ruling approval, operator acceptance or settlement.'),
+  def('rc-attention', 'Needs a decision', AttentionList, 'Cases waiting for a human: assessment, decision approval, operator acceptance or settlement.'),
   def('rc-cases', 'Cases', CasesGrid, 'All cases with agent, operator, verdict, evidence and settlement status.'),
   def('rc-case', 'Case', CaseDetail, 'One case: what was authorised, what happened, and the conclusion, with its settlement.'),
   def('rc-reputation', 'Agents and operators', Reputation, 'Agent reliability and merchant policy; operator accountability.'),

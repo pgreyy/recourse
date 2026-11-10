@@ -8,9 +8,9 @@ const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 const STATUS = {
-  COMPLIANT: { label: 'Compliant', cls: 'ok', text: 'Everything checked matches your mandate.' },
-  WARNING: { label: 'Warning', cls: 'warn', text: 'Bought within your mandate, but some details could not be verified.' },
-  VIOLATION_APPROVED: { label: 'Violation (you approved it)', cls: 'bad', text: 'This purchase broke a mandate rule and went ahead only after you approved it at PayPal.' },
+  COMPLIANT: { label: 'Compliant', cls: 'ok', text: 'Everything checked matches your instructions.' },
+  WARNING: { label: 'Warning', cls: 'warn', text: 'Bought within your instructions, but some details could not be verified.' },
+  VIOLATION_APPROVED: { label: 'Violation (you approved it)', cls: 'bad', text: 'This purchase broke one of your instructions and went ahead only after you approved it at PayPal.' },
 } as const;
 
 const day = (d: string | Date) => {
@@ -32,10 +32,10 @@ function outcome(r: NonNullable<ReceiptView>): string {
   if (!ru) return '';
   const v = VERDICT_WORDS[ru.verdict] ?? ru.verdict.toLowerCase().replace(/_/g, ' ');
   if (ru.case_status === 'CLOSED') {
-    return `<section class="sec outcome" role="status"><h2>Outcome</h2><p><strong>Resolved on ${esc(day(ru.approved_at))}: no refund.</strong></p><p class="muted">The ruling found ${esc(v)}.</p></section>`;
+    return `<section class="sec outcome" role="status"><h2>Outcome</h2><p><strong>Resolved on ${esc(day(ru.approved_at))}: no refund.</strong></p><p class="muted">The decision found ${esc(v)}.</p></section>`;
   }
   const where = ru.source === 'PAYPAL_DISPUTE' ? ' Your PayPal dispute is still under review at PayPal, which makes the final decision.' : '';
-  return `<section class="sec outcome" role="status"><h2>Outcome</h2><p><strong>Ruling on ${esc(day(ru.approved_at))}: ${esc(v)}.</strong></p><p class="muted">Not resolved yet.${where}</p></section>`;
+  return `<section class="sec outcome" role="status"><h2>Outcome</h2><p><strong>Decision on ${esc(day(ru.approved_at))}: ${esc(v)}.</strong></p><p class="muted">Not resolved yet.${where}</p></section>`;
 }
 
 const CASE_STATUS: Record<string, string> = { OPEN: 'open', ASSESSED: 'being reviewed', RULING_APPROVED: 'decided', APPEALED: 'under appeal', CLOSED: 'closed' };
@@ -92,7 +92,7 @@ ${notice ? `<p class="notice" role="status">${esc(notice)}</p>` : ''}
 <article class="sheet">
 <section class="sec"><h2>Compliance</h2><span class="badge ${st.cls}">${esc(st.label)}</span><p class="muted">${esc(st.text)}</p></section>
 <section class="sec"><h2>What you asked for</h2><p class="quote">${esc(r.source_text)}</p>
-<p class="muted">Mandate v${esc(r.mandate_version)}: ${esc(spec.category)}, up to ${esc(spec.max_total.value)} ${esc(spec.max_total.currency)} in total, by ${esc(spec.deadline)}</p></section>
+<p class="muted">Instructions v${esc(r.mandate_version)}: ${esc(spec.category)}, up to ${esc(spec.max_total.value)} ${esc(spec.max_total.currency)} in total, by ${esc(spec.deadline)}</p></section>
 <section class="sec"><h2>What was bought</h2><ul>${lines
     .map((l) => `<li>${esc(l.quantity)} × ${esc(l.name)}, size ${esc(l.attributes.size)} ${l.attributes.unit_system ? esc(l.attributes.unit_system) : '(no size system given)'}${l.attributes.gender ? `, ${esc(l.attributes.gender)}'s` : ''}, ${esc(l.price)} ${esc(r.currency)}</li>`)
     .join('')}</ul><p>Total <strong class="amt">${esc(r.total)} ${esc(r.currency)}</strong> from ${esc(r.merchant_name)}</p></section>

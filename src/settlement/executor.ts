@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { instructionWords } from '../shared/words';
 import { agentCoverage } from '../authorization/coverage';
 import { appendEntry } from '../evidence/recorder';
 
@@ -358,7 +359,8 @@ export async function settlementView(obligationId: string, live = false) {
     amount: { value: ob.amount_value, currency: ob.currency.trim() },
     recovered: { value: ob.recovered_value, currency: ob.currency.trim() },
     last_error: ob.last_error,
-    checks: ob.checks,
+    // Pre-check details are shown to people: "decision", "instructions" (stored text unchanged).
+    checks: Array.isArray(ob.checks) ? (ob.checks as Array<Record<string, unknown>>).map((c) => (typeof c.detail === 'string' ? { ...c, detail: instructionWords(c.detail) } : c)) : ob.checks,
     paypal_dispute: paypalDispute,
     actions: actions.map((a) => ({
       action: a.action,

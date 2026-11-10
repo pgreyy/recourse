@@ -3,12 +3,12 @@
 **Agents can transact. Someone must own the outcome.**
 
 When an AI agent buys the wrong thing for someone, Recourse makes the agent's operator pay, automatically, within a
-signed and capped agreement, on PayPal. The buyer signs a mandate, the agent shops under it, every decision is recorded
-and anchored in the PayPal order, and when a purchase breaks the mandate Recourse refunds the buyer and charges the
+signed and capped agreement, on PayPal. The buyer signs buyer instructions (a signed mandate, as in AP2), the agent shops under them, every decision is
+recorded and anchored in the PayPal order, and when a purchase breaks the instructions Recourse refunds the buyer and charges the
 operator's saved PayPal, up to the caps the operator accepted in advance. Disputes are the fallback, not the plan.
 
 Shopping is the demo. Any agent that spends money on someone's behalf (travel booking, business procurement, ads,
-software and data purchases) has the same gap, and Recourse's pieces are domain-neutral: the signed mandate, the
+software and data purchases) has the same gap, and Recourse's pieces are domain-neutral: the signed instructions, the
 decision recorder, the snapshot of options the agent was shown, the operator's liability agreement and PayPal
 settlement.
 
@@ -42,7 +42,7 @@ step-up, and its next checkout returned 422 with nothing charged.
   it decided. Code checks whether an in-stock listing met every clause. "A compliant alternative existed" is a computed
   fact, so the fault definition is testable.
 - **The decision trail anchored in the PayPal order.** The recorder is a hash chain with signed checkpoints; at checkout
-  its head hash goes into the PayPal order description and the mandate hash into `custom_id`. PayPal's own record pins
+  its head hash goes into the PayPal order description and the instructions hash into `custom_id`. PayPal's own record pins
   what the agent had done when it paid.
 - **Reputation that changes checkout.** Confirmed faults move an agent version from normal to step-up to suspended.
 
@@ -55,9 +55,9 @@ step-up, and its next checkout returned 422 with nothing charged.
   recorded, and proceeding past it is recorded too.
 - Assessment pipeline: 12 code checks (including a live re-read of the PayPal order and capture), the counterfactual,
   an injection scan that flags instruction-like text from merchants, buyers and operators, then one model call with
-  structured output, then validation in code. Anything unproven becomes INCONCLUSIVE, never a ruling. A person approves
-  every ruling; Recourse signs it.
-- Settlement: pre-checks (ruling approved, operator accepted or appeal window over, agreement covers the agent version,
+  structured output, then validation in code. Anything unproven becomes INCONCLUSIVE, never a decision. A person approves
+  every decision; Recourse signs it.
+- Settlement: pre-checks (decision approved, operator accepted or appeal window over, agreement covers the agent version,
   caps), the intent stored before each PayPal call, an idempotency key as `PayPal-Request-Id`, reconciliation of
   uncertain outcomes, and RECOVERED only once PayPal confirms by webhook or re-read.
 - Scorecard: 24 labelled cases through the same pipeline (prompt hash `223ccdc1e547`). gpt-5-mini: 23 of 24 correct,
@@ -71,7 +71,7 @@ step-up, and its next checkout returned 422 with nothing charged.
 ## Design
 
 - Five screens in the order a story runs: operator onboarding (the agreement, caps, fault definition, the sandbox
-  disclosure, Accept, then PayPal), the buyer mandate (plain English beside the compiled rules, then PayPal), the agent
+  disclosure, Accept, then PayPal), the buyer instructions (plain English beside the compiled rules, then PayPal), the agent
   run (a live timeline that ends with the PayPal ids and the anchor check), the receipt (confirm or report an issue),
   and the console.
 - The console is built on AG Studio with custom widgets: overview, a cases grid (AG Grid, grouping and filters, a
@@ -87,15 +87,15 @@ step-up, and its next checkout returned 422 with nothing charged.
 
 The video follows the two scenarios: a covered agent buys the wrong size, the buyer reports it from the receipt, the
 case shows the warning it ignored and the compliant pair it could have bought, a person approves, and PayPal refunds
-the buyer and charges the operator; then a careful agent's purchase disputed on PayPal is judged buyer's remorse and
-answered with evidence. Judges can repeat both on the hosted demo from `/app/judges`.
+the buyer and charges the operator; then a careful agent's purchase disputed on PayPal is found to be buyer's remorse and
+answered with evidence. Anyone can repeat both on the hosted demo, following the demo guide at `/app/judges`.
 
 ## How we used PayPal and AI
 
 **PayPal (sandbox), every API we call:**
 
 - **OAuth 2.0** (`/v1/oauth2/token`).
-- **Vault v3** (`/v3/vault/setup-tokens`, `/v3/vault/payment-tokens`): the buyer saves PayPal for a mandate; the
+- **Vault v3** (`/v3/vault/setup-tokens`, `/v3/vault/payment-tokens`): the buyer saves PayPal for a set of instructions; the
   operator saves PayPal under its liability agreement.
 - **Orders v2** (`/v2/checkout/orders`, `/capture`, `/track`): agent purchases with the saved PayPal, payer not
   present, carrying the anchor in `description` and `custom_id`; buyer-approval orders for blocked purchases; the
@@ -113,16 +113,16 @@ answered with evidence. Judges can repeat both on the hosted demo from `/app/jud
 
 **AI, every model and what it does:**
 
-- **gpt-5-nano (OpenAI)** compiles the buyer's plain English into mandate rules (structured output, validated by code).
+- **gpt-5-nano (OpenAI)** compiles the buyer's plain English into instruction rules (structured output, validated by code).
 - **gpt-5-nano** runs the two demo buying agents through the Vercel AI SDK tool loop (search, cart, checkout). They are
   the agents being held accountable.
 - **gpt-5-mini (OpenAI)** assesses cases: structured output, no tools, its answer validated by code, its confidence
   never shown.
-- **gpt-5-nano** powers the Clerk, a custom agent in the AG Studio Agent Framework with read-only tools (cases,
-  rulings, settlements, reputation, scorecard). It can propose "approve ruling X"; only the button on the case acts.
+- **gpt-5-mini** powers the Clerk, a custom agent in the AG Studio Agent Framework with read-only tools (cases,
+  decisions, settlements, reputation, scorecard). It can propose "approve decision X"; only the button on the case acts.
 - **Gemini** (gemini-3.8-flash, then gemini-3.6-flash) is the fallback chain when OpenAI is overloaded or failing.
 - **The AI has no payment tools.** Refunds, charges, invoices and dispute actions are plain code, run only after a
-  person approves a ruling.
+  person approves a decision.
 
 ## Built with
 

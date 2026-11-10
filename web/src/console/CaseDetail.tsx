@@ -69,7 +69,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
   const runEnd = timeline.find((e) => e.kind === 'agent.run.finished' || e.kind === 'agent.run.failed')?.seq;
 
   const canApprove = Boolean(a && !ruling && a.verdict !== 'INCONCLUSIVE' && a.validation?.passed);
-  const approveWhy = !a ? 'Not assessed yet' : ruling ? null : a.verdict === 'INCONCLUSIVE' ? 'Inconclusive: cannot become a ruling' : !a.validation?.passed ? 'Did not pass validation' : null;
+  const approveWhy = !a ? 'Not assessed yet' : ruling ? null : a.verdict === 'INCONCLUSIVE' ? 'Inconclusive: cannot become a decision' : !a.validation?.passed ? 'Did not pass validation' : null;
   const operatorLiable = ruling?.liable_party === 'OPERATOR';
   const canAccept = Boolean(operatorLiable && ruling?.status === 'RULING_APPROVED' && !ruling.operator_accepted_at);
 
@@ -129,7 +129,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
             <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
             {ruling ? (
               <span className="small muted" style={{ textAlign: 'right' }}>
-                <Status tone="ok">Ruling approved</Status>
+                <Status tone="ok">Decision approved</Status>
                 <br />
                 by {ruling.approved_by_name}, {when(ruling.approved_at)}
               </span>
@@ -144,7 +144,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
                   {doing === 'assess' ? 'Assessing… (about 30 s)' : a ? 'Re-assess' : 'Assess'}
                 </button>
                 <button className="btn" disabled={!canApprove || busy} onClick={() => setDialog('approve')} title={approveWhy ?? undefined}>
-                  Approve ruling
+                  Approve decision
                 </button>
               </>
             )}
@@ -189,7 +189,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
             {mandate ? (
               <>
                 <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <strong>Signed mandate, version {mandate.version}</strong>
+                  <strong>Signed instructions, v{mandate.version}</strong>
                   <span className="row" style={{ gap: 6 }}>
                     <Status tone={mandate.signature_valid ? 'ok' : 'bad'}>{mandate.signature_valid ? 'Signature valid' : 'Signature invalid'}</Status>
                     <Who by="code" />
@@ -226,7 +226,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
                 </dl>
               </>
             ) : (
-              <p className="muted">No mandate linked.</p>
+              <p className="muted">No instructions linked.</p>
             )}
           </div>
         </section>
@@ -246,7 +246,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
             {runEnd && timeline.some((e) => e.seq > runEnd) && (
               <details open={false} id="later-entries">
                 <summary className="small" style={{ cursor: 'pointer' }}>
-                  After the purchase: {timeline.filter((e) => e.seq > runEnd).length} more entries (report, assessment, ruling, settlement)
+                  After the purchase: {timeline.filter((e) => e.seq > runEnd).length} more entries (report, assessment, decision, settlement)
                 </summary>
                 <div style={{ marginTop: 6 }}>
                   <Timeline compact entries={timeline.filter((e) => e.seq > runEnd)} idPrefix="cstep" />
@@ -278,7 +278,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
                     <Verdict v={ruling?.verdict ?? a.verdict} />
                   </div>
                   <p className="small muted" style={{ marginTop: 4 }}>
-                    {ruling ? `Ruling: liable party ${ruling.liable_party.toLowerCase().replace('_', ' ')}, ${money({ value: ruling.amount, currency: ruling.currency.trim() })}.` : 'Proposed by the assessment; not yet a ruling.'} Proposed by <Who by="ai" />, checked by <Who by="code" />, approved by a person.
+                    {ruling ? `Decision: liable party ${ruling.liable_party.toLowerCase().replace('_', ' ')}, ${money({ value: ruling.amount, currency: ruling.currency.trim() })}.` : 'Proposed by the assessment; not yet a decision.'} Proposed by <Who by="ai" />, checked by <Who by="code" />, approved by a person.
                   </p>
                 </div>
                 <Block title="Violated clause" by="ai">
@@ -289,7 +289,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
                       </p>
                     ))
                   ) : (
-                    <p className="muted">None. No mandate clause was broken.</p>
+                    <p className="muted">None. No clause of the instructions was broken.</p>
                   )}
                 </Block>
                 <Block title="Cited steps" by="ai">
@@ -356,8 +356,8 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
 
       {dialog === 'approve' && (
         <PersonDialog
-          title="Approve ruling"
-          text={`Approving signs a ruling of ${(a?.verdict ?? '').replace(/_/g, ' ').toLowerCase()} for ${c.case_ref}. It moves no money by itself.`}
+          title="Approve decision"
+          text={`Approving signs a decision of ${(a?.verdict ?? '').replace(/_/g, ' ').toLowerCase()} for ${c.case_ref}. It moves no money by itself.`}
           withEmail
           busy={busy}
           error={err}
@@ -367,8 +367,8 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
       )}
       {dialog === 'accept' && (
         <PersonDialog
-          title="Operator accepts the ruling"
-          text="The operator accepts the ruling and waives the appeal window. Recovery from the operator can then run, within the agreed caps."
+          title="Operator accepts the decision"
+          text="The operator accepts the decision and waives the appeal window. Recovery from the operator can then run, within the agreed caps."
           busy={busy}
           error={err}
           onClose={() => setDialog(null)}
@@ -458,7 +458,7 @@ function SettlementPanel({ obligations, busy, act }: { obligations: any[]; busy:
         <span className="small muted">Every action with its PayPal id. Recovered only once PayPal confirms.</span>
       </div>
       <div className="card-pad stack">
-        {obligations.length === 0 && <p className="muted">No settlement yet. A settlement starts when a ruling is approved.</p>}
+        {obligations.length === 0 && <p className="muted">No settlement yet. A settlement starts when a decision is approved.</p>}
         {obligations.map((o) => (
           <div key={o.id} className="stack" style={{ gap: 10 }}>
             <div className="row" style={{ justifyContent: 'space-between' }}>

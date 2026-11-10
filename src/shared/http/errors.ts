@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Response } from 'express';
+import { instructionWords } from '../words';
 import { ZodError } from 'zod';
 import { ConfigError } from '../../config';
 import { PayPalApiError, PayPalNetworkError } from '../../paypal/types';
@@ -30,7 +31,8 @@ export function zodDetails(e: ZodError) {
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {
-    return res.status(err.status).json({ name: err.errorName, message: err.message, details: err.details });
+    // The message is for people ("instructions", "decision"); the name stays the stable code.
+    return res.status(err.status).json({ name: err.errorName, message: instructionWords(err.message), details: err.details });
   }
   if (err instanceof ZodError) {
     return res.status(400).json({ name: 'INVALID_REQUEST', message: 'Request body is not valid.', details: zodDetails(err) });

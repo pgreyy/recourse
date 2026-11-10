@@ -72,7 +72,7 @@ export function ClerkPanel({ harness, onClose }: { harness: AgAiHarness | null; 
       <div className="clerk-body" aria-live="polite">
         {messages.length === 0 && (
           <div className="stack" style={{ gap: 8 }}>
-            <p className="muted small">Ask about cases, rulings, settlements, reputation or the scorecard. Every answer comes from Recourse data through read-only tools.</p>
+            <p className="muted small">Ask about cases, decisions, settlements, reputation or the scorecard. Every answer comes from Recourse data through read-only tools.</p>
             {CLERK_STARTERS.map((s) => (
               <button key={s.label} className="starter" onClick={() => ask(s.prompt)} disabled={!harness}>
                 {s.prompt}

@@ -44,7 +44,7 @@ export function CasesGrid() {
         hide: group === 'verdict',
         filter: 'agSetColumnFilter',
         minWidth: 132,
-        cellRenderer: (p: any) => (p.data ? two0(<Verdict v={p.data.verdict} />, p.data.verdict_state === 'ASSESSED' ? 'proposed, not ruled' : p.data.verdict_state === 'RULED' ? 'ruling approved' : null) : p.value ?? null),
+        cellRenderer: (p: any) => (p.data ? two0(<Verdict v={p.data.verdict} />, p.data.verdict_state === 'ASSESSED' ? 'proposed, not decided' : p.data.verdict_state === 'RULED' ? 'decision approved' : null) : p.value ?? null),
       },
       { colId: 'evidence', headerName: 'Evidence', valueGetter: (p) => (p.data ? p.data.evidence?.label : undefined), filter: 'agSetColumnFilter', minWidth: 132, cellRenderer: (p: any) => (p.data ? <Status tone={EVIDENCE_TONE(p.value)}>{p.value}</Status> : null) },
       { colId: 'settlement', headerName: 'Settlement', valueGetter: (p) => (p.data ? settlementLabel(p.data.settlement_status) : undefined), filter: 'agSetColumnFilter', minWidth: 140, cellRenderer: (p: any) => (p.data ? <SettlementStatus s={p.data.settlement_status} /> : null) },

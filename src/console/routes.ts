@@ -10,6 +10,7 @@ import { env } from '../config';
 import { aiBudget } from '../shared/ai/budget';
 import { agentsAndOperators, caseContext, caseRows, overview, recoveredByAgentVersion, runView } from './queries';
 import { plainText } from './plain';
+import { instructionWords } from '../shared/words';
 
 /** Read-only endpoints for the screens and the Clerk (plus the Clerk's model turn). */
 export const consoleRoutes = Router();
@@ -37,7 +38,15 @@ async function caseDetail(cs: CaseRow, force: boolean) {
     verification = { evidence: cached.evidence, disputes: cached.disputes, verified_at: cached.verified_at, cached: true };
   } else {
     const { evidence_pack, ...checks } = await caseEvidence(cs);
-    const evidence = { ...checks, clauses: ((evidence_pack as any)?.mandate?.clauses ?? []).map((c: { text: string }) => ({ ...c, text: plainText(c.text) })) };
+    // Wording for people: code-written texts say "instructions" and "decision" (identifiers keep their names).
+    const words = (x: any) => (x && typeof x === 'object' ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, typeof v === 'string' && /^(detail|label|text|fact|note|summary|title)$/.test(k) ? instructionWords(v) : v])) : x);
+    const evidence = {
+      ...checks,
+      code_checks: (checks as any).code_checks?.map(words) ?? (checks as any).code_checks,
+      decision_facts: (checks as any).decision_facts?.map(words) ?? (checks as any).decision_facts,
+      counterfactual: words((checks as any).counterfactual),
+      clauses: ((evidence_pack as any)?.mandate?.clauses ?? []).map((c: { text: string }) => ({ ...c, text: plainText(c.text) })),
+    };
     const disputes: Record<string, unknown> = {};
     for (const o of obs.filter((x) => x.workflow === 'B')) disputes[o.id] = (await settlementView(o.id, true)).paypal_dispute;
     const at = new Date();

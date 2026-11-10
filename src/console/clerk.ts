@@ -113,7 +113,7 @@ function factsFallback(outputs: string[], question = ''): string {
     if (!x || typeof x !== 'object') return;
     const r = x.case_ref ?? ref;
     if (x.money_facts) lines.push(`${r ? `${r}: ` : ''}${Object.values(x.money_facts).join(' ')}`);
-    if (x.ruling?.verdict && r) rulings.push(`The approved ruling for ${r} is ${VERDICT_WORDS[x.ruling.verdict] ?? x.ruling.verdict}${x.ruling.verdict === 'BUYER_REMORSE' ? ', so under the ruling no refund is due from Recourse; any change would come from PayPal’s own dispute decision' : ''}.`);
+    if (x.ruling?.verdict && r) rulings.push(`The approved decision for ${r} is ${VERDICT_WORDS[x.ruling.verdict] ?? x.ruling.verdict}${x.ruling.verdict === 'BUYER_REMORSE' ? ', so under the decision no refund is due from Recourse; any change would come from PayPal’s own dispute decision' : ''}.`);
     for (const v of Object.values(x)) walk(v, r);
   };
   for (const o of outputs) {

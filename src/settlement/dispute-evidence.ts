@@ -5,7 +5,7 @@ import { db } from '../shared/db/pool';
 import { textPdf } from './evidence-pdf';
 
 /**
- * Evidence PDF for a dispute (BUYER_REMORSE): the signed mandate and its signature check, the buyer's
+ * Evidence PDF for a dispute (BUYER_REMORSE): the signed buyer instructions and their signature check, the buyer's
  * signed confirmation, a recorder excerpt with step numbers, the PayPal anchor check and tracking.
  * Everything in it is read from records and checked by code at the time it is built.
  */
@@ -39,10 +39,10 @@ export async function buildEvidencePdf(cs: any, order: any, ruling: any): Promis
     .join('\n');
   return textPdf(`Recourse evidence for ${cs.case_ref} (order ${order.order_ref})`, [
     {
-      heading: '1. Signed mandate',
-      body: `Buyer instruction: "${m.source_text}"\nMandate ${m.id}, version ${m.version}. Category ${spec.category}; size ${spec.attributes.map((a: { name: string; unit_system: string; value: string }) => `${a.name} ${a.unit_system ?? ''} ${a.value}`).join('; ')}; brands ${spec.brands_allowed.join(', ')}; budget ${spec.max_total.value} ${spec.max_total.currency} in total; deadline ${spec.deadline}.\nmandate_hash ${m.mandate_hash?.trim()}\nSigned ${m.signed_at?.toISOString()} with key ${m.signing_key_id}.`,
+      heading: '1. Signed buyer instructions',
+      body: `In the buyer's words: "${m.source_text}"\nInstructions ${m.id}, v${m.version}. Category ${spec.category}; size ${spec.attributes.map((a: { name: string; unit_system: string; value: string }) => `${a.name} ${a.unit_system ?? ''} ${a.value}`).join('; ')}; brands ${spec.brands_allowed.join(', ')}; budget ${spec.max_total.value} ${spec.max_total.currency} in total; deadline ${spec.deadline}.\nHash ${m.mandate_hash?.trim()}\nSigned ${m.signed_at?.toISOString()} with key ${m.signing_key_id}.`,
     },
-    { heading: '2. Signature check (at the time this file was built)', body: `Ed25519 signature over the canonical mandate: ${sig.signature_valid ? 'VALID' : 'INVALID'} (${sig.signature_check.reason}).` },
+    { heading: '2. Signature check (at the time this file was built)', body: `Ed25519 signature over the canonical instructions: ${sig.signature_valid ? 'VALID' : 'INVALID'} (${sig.signature_check.reason}).` },
     { heading: '3. What was bought', body: `${lines}\nTotal ${order.total_value} ${order.currency.trim()}. Checkout compliance: ${order.compliance} (firewall ${order.firewall?.decision}).` },
     {
       heading: '4. Buyer confirmation',
@@ -53,9 +53,9 @@ export async function buildEvidencePdf(cs: any, order: any, ruling: any): Promis
     { heading: '5. Decision record (flight recorder excerpt)', body: `${excerpt}\nChain check: ${chain.valid ? 'intact' : `problem at step ${chain.first_problem?.seq}`} (${chain.entries} entries, ${chain.checkpoints.count} signed checkpoints).` },
     {
       heading: '6. PayPal anchor check',
-      body: `PayPal order ${order.paypal_order_id}, capture ${order.paypal_capture_id}.\nOrder description at PayPal: ${unit.description ?? '(unread)'}\nRecorded chain head at purchase (step ${order.anchor_seq}): ${anchorEntry?.hash ?? '(missing)'}\nMatch: ${unit.description === `RCS-ANCHOR ${anchorEntry?.hash}` ? 'YES' : 'NO'}. custom_id = mandate_hash: ${unit.custom_id === m.mandate_hash?.trim() ? 'YES' : 'NO'}. invoice_id = order ref: ${unit.invoice_id === order.order_ref ? 'YES' : 'NO'}.`,
+      body: `PayPal order ${order.paypal_order_id}, capture ${order.paypal_capture_id}.\nOrder description at PayPal: ${unit.description ?? '(unread)'}\nRecorded chain head at purchase (step ${order.anchor_seq}): ${anchorEntry?.hash ?? '(missing)'}\nMatch: ${unit.description === `RCS-ANCHOR ${anchorEntry?.hash}` ? 'YES' : 'NO'}. custom_id = instructions hash: ${unit.custom_id === m.mandate_hash?.trim() ? 'YES' : 'NO'}. invoice_id = order ref: ${unit.invoice_id === order.order_ref ? 'YES' : 'NO'}.`,
     },
     { heading: '7. Shipping', body: `Tracker on the capture: ${order.tracker_id ?? 'none'}.` },
-    { heading: '8. Ruling', body: `Recourse ruling ${ruling.id}: ${ruling.verdict}, approved by ${ruling.approved_by_name} at ${new Date(ruling.approved_at).toISOString()}. Ruling document hash ${ruling.document_hash?.trim()}.` },
+    { heading: '8. Decision', body: `Recourse decision ${ruling.id}: ${ruling.verdict}, approved by ${ruling.approved_by_name} at ${new Date(ruling.approved_at).toISOString()}. Decision document hash ${ruling.document_hash?.trim()}.` },
   ]);
 }

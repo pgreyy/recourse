@@ -4,14 +4,14 @@
 
 **Agents can transact. Someone must own the outcome.**
 
-Recourse lets an AI shopping agent buy for a person under a mandate the person signed. Every decision the agent makes is
+Recourse lets an AI shopping agent buy for a person under buyer instructions (a signed mandate, as in AP2) the person signed. Every decision the agent makes is
 recorded and anchored in the PayPal order. When the purchase goes wrong, Recourse works out who is responsible, and if
 it was the agent, the agent's operator pays, automatically, on PayPal, within a liability agreement it signed in
 advance with caps. It is a working prototype on the **PayPal sandbox**, built for the PayPal AI Hackathon 2026.
 **It covers one demo merchant (Stride & Co, running shoes), two buying agents and one operator. It does not move real
 money, and it does not change how PayPal decides disputes.**
 
-Hosted demo and video: links in the Devpost submission. On the hosted demo, start at `/app/judges`.
+Hosted demo and video: links in the Devpost submission. On the hosted demo, start at the demo guide (`/app/judges`).
 
 Contents: [The problem](#the-problem) · [What is new](#what-is-new) · [Try it](#try-it) · [Code or AI](#what-code-decides-and-what-the-ai-decides) ·
 [How it works](#how-it-works) · [Evidence](#evidence) · [PayPal APIs](#paypal-apis-used) · [AI](#ai-used) ·
@@ -23,11 +23,11 @@ AI agents can now pay, but when one buys the wrong thing nobody has agreed who p
 merchant absorbs the refund or the chargeback even when the merchant did nothing wrong. 93% of merchants in a PYMNTS
 Intelligence survey of 60 US retailers (Sep 2026) say the agent provider should cover losses from an agent's wrong
 purchase, [as reported by Forkast](https://forkast.news/the-agentic-commerce-liability-gap-who-pays-when-the-agent-buys-wrong/).
-A mandate can prove what the buyer authorised; nothing yet makes the party that actually erred, the agent's operator,
+Signed instructions can prove what the buyer authorised; nothing yet makes the party that actually erred, the agent's operator,
 pay for the error.
 
 Shopping is the demo. Any agent that spends money on someone's behalf (travel booking, business procurement, ads,
-software and data purchases) has the same gap, and Recourse's pieces are domain-neutral: the signed mandate, the
+software and data purchases) has the same gap, and Recourse's pieces are domain-neutral: the signed instructions, the
 decision recorder, the snapshot of options the agent was shown, the operator's liability agreement and PayPal
 settlement.
 
@@ -37,25 +37,25 @@ settlement.
 
 1. **Operator liability, signed, capped and auto-charged on PayPal.** The agent's operator accepts a versioned liability
    agreement (150.00 USD per incident, 500.00 USD in total, a 72 hour appeal window) and saves a PayPal payment method
-   under it. When a ruling finds the agent at fault, Recourse refunds the buyer and charges the operator's saved PayPal,
+   under it. When a decision finds the agent at fault, Recourse refunds the buyer and charges the operator's saved PayPal,
    payer not present, within the caps. Agents without an agreement can still shop, but every purchase needs the buyer's
    approval at PayPal.
 2. **A counterfactual from a frozen catalog snapshot.** The catalog the agent was shown is stored with its sha256 at the
-   moment it decided. Code then asks: did an in-stock listing satisfy every mandate clause at that step? "A compliant
+   moment it decided. Code then asks: did an in-stock listing satisfy every clause of the instructions at that step? "A compliant
    alternative existed" is a fact computed by code, not an opinion from a model.
 3. **The decision trail's head anchored in the PayPal order.** Every agent step goes into a hash chain with signed
-   checkpoints. At checkout, the chain's head hash is written into the PayPal order's description and the mandate hash
+   checkpoints. At checkout, the chain's head hash is written into the PayPal order's description and the instructions hash
    into `custom_id`, so PayPal's own copy of the order pins what the agent had done when it paid.
 
 ## Try it
 
-On the hosted demo, `/app/judges` has the sandbox logins and the exact click path. In short:
+On the hosted demo, the demo guide (`/app/judges`) has the sandbox logins and the exact click path. In short:
 
 | Scenario | What you do | What you see |
 | --- | --- | --- |
-| A: the agent's fault (about 6 min) | Sign the mandate "Running shoes, US men's 10, under $120, Kestrel or Sorin, by Friday", run Acme Shopper v1.3, report "These are UK sizing" on the receipt, then Assess, Approve ruling, Operator accepts, Run settlement | The firewall warned at one step and the agent proceeded at the next; the buyer is refunded and the operator charged on PayPal; Recovered only once PayPal confirms; v1.3 moves to step-up |
-| B: a dispute that is buyer's remorse (about 10 min) | Run Acme Shopper v2.0 (it buys a compliant pair), open a dispute as the buyer on sandbox.paypal.com, then Assess, Approve ruling, Run settlement | The webhook opens the case on its own; verdict buyer's remorse; Recourse escalates the dispute and files an evidence PDF with PayPal |
-| The Clerk | Ask "Which agent version caused the most recovered losses this week?", then ask it to approve a ruling | A read-only answer from the data; it can only propose an action, and only the button on the case acts |
+| A: the agent's fault (about 6 min) | Sign the instructions "Running shoes, US men's 10, under $120, Kestrel or Sorin, by Friday", run Acme Shopper v1.3, report "These are UK sizing" on the receipt, then Assess, Approve decision, Operator accepts, Run settlement | The firewall warned at one step and the agent proceeded at the next; the buyer is refunded and the operator charged on PayPal; Recovered only once PayPal confirms; v1.3 moves to step-up |
+| B: a dispute that is buyer's remorse (about 10 min) | Run Acme Shopper v2.0 (it buys a compliant pair), open a dispute as the buyer on sandbox.paypal.com, then Assess, Approve decision, Run settlement | The webhook opens the case on its own; verdict buyer's remorse; Recourse escalates the dispute and files an evidence PDF with PayPal |
+| The Clerk | Ask "Which agent version caused the most recovered losses this week?", then ask it to approve a decision | A read-only answer from the data; it can only propose an action, and only the button on the case acts |
 
 Screenshots of every screen: [docs/screenshots/](docs/screenshots/), described in
 [docs/phase7-screens.md](docs/phase7-screens.md).
@@ -64,35 +64,35 @@ Screenshots of every screen: [docs/screenshots/](docs/screenshots/), described i
 
 | Part | Who decides | Shown as |
 | --- | --- | --- |
-| Mandate rules | The model drafts them from plain English; code validates them against a strict schema; the buyer approves; Recourse signs (Ed25519) | Signed mandate, signature checked on every read |
+| Instruction rules | The model drafts them from plain English; code validates them against a strict schema; the buyer approves; Recourse signs (Ed25519) | Signed instructions, signature checked on every read |
 | Checkout firewall | Code only: budget across all orders, quantity, brands, merchant, deadline, size value and size system, substitution, operator coverage, agent reputation | Pass, Warning (proceed recorded) or Block (buyer approval at PayPal) |
-| Evidence checks | Code only: mandate signature, PayPal order and capture re-read, `custom_id`, `invoice_id`, amounts, hash chain, snapshot hash, receipt | Each check tagged **Code** on the case screen |
+| Evidence checks | Code only: signature on the instructions, PayPal order and capture re-read, `custom_id`, `invoice_id`, amounts, hash chain, snapshot hash, receipt | Each check tagged **Code** on the case screen |
 | Counterfactual | Code only, from the frozen snapshot | Tagged **Code** |
 | Instruction-like text in evidence | Code flags it (for example "Ignore previous instructions" written into a listing or an operator statement); the model is told it is data | Tagged **Code** |
 | Verdict and reasoning | The model proposes from a structured evidence pack; code validates (it may only cite real steps and clauses that code did not pass, else INCONCLUSIVE) | Tagged **AI**; the model's confidence is never shown |
-| Ruling | A person approves; Recourse signs it | Approve ruling button |
+| Decision | A person approves; Recourse signs it | Approve decision button |
 | Money | Code only: pre-checks, an intent stored before each PayPal call, an idempotency key as `PayPal-Request-Id`, confirmation by webhook or a re-read | Recovered only once PayPal confirms |
 
 **The AI has no payment tools.** The assessment model returns structured output and calls no tools. The Clerk's tools
-are all read-only. Only the settlement executor, which is plain code behind a human-approved ruling, calls PayPal's
+are all read-only. Only the settlement executor, which is plain code behind a human-approved decision, calls PayPal's
 refund, charge, invoice and dispute APIs. (The two buying agents do have a checkout tool: they are the agents being
 held accountable, not part of Recourse's decision.)
 
 ## How it works
 
 ```
-  Buyer ── plain English ──▶ mandate rules ──▶ approve at PayPal (Vault) ──▶ signed mandate
+  Buyer ── plain English ──▶ instruction rules ──▶ approve at PayPal (Vault) ──▶ signed instructions
   Operator ── accepts liability agreement (caps, appeal window) ──▶ saves PayPal under it (Vault)
 
   Agent ── search, cart, checkout ──▶ Stride & Co ──▶ checkout firewall (code)
      │ every step                                        │ pass / warn / block
      ▼                                                    ▼
-  flight recorder (hash chain + signed checkpoints) ──▶ PayPal order: custom_id = mandate hash,
+  flight recorder (hash chain + signed checkpoints) ──▶ PayPal order: custom_id = instructions hash,
                                                         description = recorder head hash
   Something went wrong:
   receipt "Report an issue"  or  PayPal dispute (webhook) ──▶ case
      ──▶ code checks + counterfactual (frozen snapshot) + injection flags ──▶ evidence pack
-     ──▶ AI assessment (structured, no tools) ──▶ validation in code ──▶ a person approves ──▶ signed ruling
+     ──▶ AI assessment (structured, no tools) ──▶ validation in code ──▶ a person approves ──▶ signed decision
      ──▶ settlement (code): refund buyer │ charge operator's saved PayPal │ invoice fallback │ dispute actions
      ──▶ confirmed by webhook ──▶ reputation ──▶ merchant checkout policy (normal / step-up / suspended)
 ```
@@ -123,7 +123,7 @@ Every id below is a PayPal sandbox id from a recorded run on 2026-11-10 (details
   | openai/gpt-5-mini (used for assessments) | 23 of 24 (95.8%) | 0.0% | 16.7% |
   | openai/gpt-5-nano | 24 of 24 (100.0%) | 0.0% | 20.8% |
 
-  INCONCLUSIVE is the safe failure: it never becomes a ruling. The number that matters most is false AGENT_FAULT,
+  INCONCLUSIVE is the safe failure: it never becomes a decision. The number that matters most is false AGENT_FAULT,
   charging an operator who was not at fault: 0 in both runs. gpt-5-mini's one miss (BL-01) was expected INCONCLUSIVE
   and came back MERCHANT_FAULT. One run per model, so small differences between the two are noise.
 - **The Clerk's money facts.** Three questions with known answers ("is B refunded?", "how much was recovered from
@@ -138,7 +138,7 @@ Every id below is a PayPal sandbox id from a recorded run on 2026-11-10 (details
 | API | Endpoints | For |
 | --- | --- | --- |
 | OAuth 2.0 | `/v1/oauth2/token` | Access tokens |
-| Vault v3 | `/v3/vault/setup-tokens`, `/v3/vault/payment-tokens` | The buyer saves PayPal for a mandate; the operator saves PayPal under its liability agreement |
+| Vault v3 | `/v3/vault/setup-tokens`, `/v3/vault/payment-tokens` | The buyer saves PayPal for a set of instructions; the operator saves PayPal under its liability agreement |
 | Orders v2 | `/v2/checkout/orders`, `/capture`, `/track` | Agent purchases with `vault_id`, payer not present, with the anchor in `description` and `custom_id`; buyer-approval orders for blocked purchases; operator charges; tracking |
 | Payments v2 | `/v2/payments/captures/{id}`, `/refund`, `/v2/payments/refunds/{id}` | Buyer refunds; fee breakdowns; confirmation re-reads |
 | Invoicing v2 | `/v2/invoicing/invoices`, `/send`, `generate-next-invoice-number` | Fallback when an operator charge fails |
@@ -151,10 +151,10 @@ Orders, Payments and Vault calls go through `@paypal/paypal-server-sdk`; the res
 
 | Job | Model | Notes |
 | --- | --- | --- |
-| Compile the mandate from plain English | gpt-5-nano (OpenAI) | Structured output; code validates against the schema; nothing saved if it fails |
+| Compile the instructions from plain English | gpt-5-nano (OpenAI) | Structured output; code validates against the schema; nothing saved if it fails |
 | The two buying agents (the agents under test) | gpt-5-nano | Vercel AI SDK tool loop: search, cart, checkout |
 | Case assessment | gpt-5-mini | Structured output, no tools; validated in code |
-| The Clerk (console assistant) | gpt-5-nano | A custom agent in the AG Studio Agent Framework; read-only tools; called from the server only |
+| The Clerk (console assistant) | gpt-5-mini (set by `AI_CLERK_MODEL`) | A custom agent in the AG Studio Agent Framework; read-only tools; called from the server only |
 | Fallback chain | OpenAI first (the current setting, `AI_PRIMARY=openai`), then Gemini gemini-3.8-flash and gemini-3.6-flash | A model that is overloaded, times out or returns a 5xx after one retry hands over to the next; the log names the model that answered |
 
 A public demo limit protects the AI budget: 60 model calls per hour in total and 3 agent runs per hour per visitor
@@ -205,14 +205,14 @@ Postman collection: [docs/reference.md](docs/reference.md).
 | [AgentLair](https://github.com/piiiico/agentlair) | Agent identity, a credential at session start and a log of every tool call, verifiable in a dispute | Recourse's recorder is anchored inside the PayPal order itself, and the outcome is a payment, not only evidence |
 | [proof-of-intent](https://github.com/harshkumarsingh12/proof-of-intent) (PayPal AI Hackathon 2026) | Checks the agent's cart against the shopper's signed intent before capture; answers disputes with evidence or a fair refund | Shifts the loss from the merchant to the operator, by contract, and decides fault with a counterfactual from the frozen snapshot |
 | [SettleAI](https://github.com/Mokshitsharma/settleai) (PayPal AI Hackathon 2026) | Escrow for work that AI agents hire people to do, with a liability finding on disputes | Recourse is for agent purchases from merchants, and charges the operator after the fact rather than holding funds |
-| [Tian Pan, "The Agent With Your Credit Card"](https://tianpan.co/blog/2026/07/02/the-agent-with-your-credit-card) (Jul 2026) | Argues for liability that follows the signature: the agent platform pays if its signed cart deviates from the user's intent | A working version of that rule on PayPal: signed mandate, agreed caps, an automatic charge to the operator |
+| [Tian Pan, "The Agent With Your Credit Card"](https://tianpan.co/blog/2026/07/02/the-agent-with-your-credit-card) (Jul 2026) | Argues for liability that follows the signature: the agent platform pays if its signed cart deviates from the user's intent | A working version of that rule on PayPal: signed instructions, agreed caps, an automatic charge to the operator |
 
 ## Roadmap
 
 1. **Operators across merchants:** a PayPal platform or multiparty setup so one operator agreement covers many merchants.
 2. **Standard mandates in, standard evidence out:** accept AP2 and Verifiable Intent mandates; export each case as a
    portable evidence pack anyone can verify offline.
-3. **Disputes end to end:** feed rulings into PayPal's dispute flow wherever the API offers a decision step.
+3. **Disputes end to end:** feed decisions into PayPal's dispute flow wherever the API offers a decision step.
 4. **Appeals by the operator in the console:** the API already supports appeals and reversals; the screens do not.
 5. **Bonds for new operators:** a deposit or a higher step-up threshold until an operator has a payment history.
 6. **Production hardening:** sign-in and roles for the console, durable rate limits, an external security review.

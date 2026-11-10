@@ -307,7 +307,7 @@ async function anchorCheck(order: any, entries: RecorderEntry[]) {
   const checks = [
     { id: 'description', ok: unit.description === order.anchor_description, detail: `PayPal description: ${unit.description ?? '(none)'}` },
     { id: 'head_hash', ok: Boolean(atAnchor && order.anchor_head_hash.trim() === atAnchor.hash && String(unit.description ?? '').includes(atAnchor.hash.slice(0, 16))), detail: `recorder head at step ${order.anchor_seq}: ${atAnchor?.hash.slice(0, 16) ?? '?'}...` },
-    { id: 'custom_id', ok: unit.custom_id === order.custom_id, detail: `custom_id ${String(unit.custom_id ?? '').slice(0, 16)}... is the mandate hash` },
+    { id: 'custom_id', ok: unit.custom_id === order.custom_id, detail: `custom_id ${String(unit.custom_id ?? '').slice(0, 16)}... is the instructions hash` },
     { id: 'invoice_id', ok: unit.invoice_id === order.invoice_id, detail: `invoice_id ${unit.invoice_id ?? '(none)'}` },
     { id: 'chain', ok: chain.valid, detail: `${chain.entries} entries up to the anchor verify` },
   ];

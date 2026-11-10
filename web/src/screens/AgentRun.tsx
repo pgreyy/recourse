@@ -42,7 +42,7 @@ export function AgentRun() {
       <div className="page-head">
         <div>
           <h1>Agent run</h1>
-          <p>Pick an agent version and a signed mandate, then watch every step it takes. Each step is written to a hash-chained flight recorder, and the chain is anchored in the PayPal order at checkout.</p>
+          <p>Pick an agent version and signed buyer instructions, then watch every step it takes. Each step is written to a hash-chained flight recorder, and the chain is anchored in the PayPal order at checkout.</p>
         </div>
       </div>
       <div className="grid2 grid-run" style={{ alignItems: 'start' }}>
@@ -60,9 +60,9 @@ export function AgentRun() {
               </select>
             </label>
             <label className="field">
-              Mandate (signed, active)
+              Instructions (signed, active)
               <select value={mId} onChange={(e) => setMandate(e.target.value)}>
-                {active.length === 0 && <option value="">No active mandate</option>}
+                {active.length === 0 && <option value="">No active instructions</option>}
                 {active.map((m) => (
                   <option key={m.id} value={m.id}>
                     v{m.version}: {m.source_text.slice(0, 60)}

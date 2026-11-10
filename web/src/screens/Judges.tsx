@@ -12,9 +12,9 @@ export function Judges() {
     <main className="page" style={{ maxWidth: 980 }}>
       <div className="page-head">
         <div>
-          <h1>For judges</h1>
+          <h1>Demo guide</h1>
           <p>
-            Recourse is the liability layer for agentic commerce. A buyer signs a mandate, an AI agent shops under it, and every decision the agent makes is
+            Recourse is the liability layer for agentic commerce. A buyer signs instructions, an AI agent shops under them, and every decision the agent makes is
             recorded and anchored in the PayPal order. When the purchase goes wrong, Recourse works out who is responsible and the agent's operator pays,
             automatically, on PayPal, within a liability agreement it signed with caps.
           </p>
@@ -25,7 +25,7 @@ export function Judges() {
         <section className="card card-pad stack" aria-labelledby="logins">
           <h2 id="logins">Before you start</h2>
           <div className="grid2">
-            <LoginCard title="Sandbox buyer (approves mandates, opens the dispute)" l={j.data?.buyer} />
+            <LoginCard title="Sandbox buyer (approves instructions, opens the dispute)" l={j.data?.buyer} />
             <LoginCard title="Sandbox operator (already onboarded)" l={j.data?.operator} />
           </div>
           <Notice id="judges-sandbox" summary="The PayPal pages are real PayPal, in its sandbox. No real money moves.">
@@ -45,10 +45,10 @@ export function Judges() {
           steps={[
             <>
               <Link to="/buyer">Buyer</Link>: keep the text <q>{MANDATE}</q>, enter any email, <b>Compile rules</b>. Compare your words with the compiled rules, then{' '}
-              <b>Approve with PayPal</b> and log in as the sandbox buyer. You come back to a signed, active mandate.
+              <b>Approve with PayPal</b> and log in as the sandbox buyer. You come back to signed, active instructions.
             </>,
             <>
-              <Link to="/agent">Agent run</Link>: pick <b>Acme Shopper v1.3 (fast)</b> and your mandate, <b>Run agent</b>. Watch the timeline: the cart is out of stock,{' '}
+              <Link to="/agent">Agent run</Link>: pick <b>Acme Shopper v1.3 (fast)</b> and your instructions, <b>Run agent</b>. Watch the timeline: the cart is out of stock,{' '}
               the merchant suggests a substitute (size 10 with no size system), the agent accepts it, then a <b>Firewall warning</b> and <b>Checkout went ahead despite the warning</b>. It ends with the PayPal
               order and capture ids and <b>Decision trail anchored in the PayPal order</b>.
             </>,
@@ -61,7 +61,7 @@ export function Judges() {
               conclusion, each check tagged Code or AI.
             </>,
             <>
-              <b>Approve ruling</b> (your name and email), then <b>Operator accepts</b>, then <b>Run settlement</b> in the settlement panel: the buyer is refunded
+              <b>Approve decision</b> (your name and email), then <b>Operator accepts</b>, then <b>Run settlement</b> in the settlement panel: the buyer is refunded
               and the operator's saved PayPal is charged, with real PayPal ids. Press <b>Check with PayPal</b> until both say Confirmed: only then does it say
               Recovered.
             </>,
@@ -77,7 +77,7 @@ export function Judges() {
           title="Scenario B: a PayPal dispute that is buyer's remorse (about 10 minutes)"
           steps={[
             <>
-              <Link to="/buyer">Buyer</Link>: compile and approve a new mandate (one order per mandate; the same text works).
+              <Link to="/buyer">Buyer</Link>: compile and approve new instructions (one order per set; the same text works).
             </>,
             <>
               <Link to="/agent">Agent run</Link>: pick <b>Acme Shopper v2.0 (careful)</b>. It buys the compliant Sorin Cloudline US 10; the firewall passes.
@@ -92,7 +92,7 @@ export function Judges() {
               citing the compliant purchase and your own words in the dispute.
             </>,
             <>
-              <b>Approve ruling</b>, then <b>Run settlement</b>: Recourse escalates the dispute and, once PayPal offers it (a few minutes later), <b>Run
+              <b>Approve decision</b>, then <b>Run settlement</b>: Recourse escalates the dispute and, once PayPal offers it (a few minutes later), <b>Run
               settlement</b> again files a two page evidence PDF with PayPal. The panel shows PayPal's live dispute status; the sandbox does not decide disputes, so
               it stays under review.
             </>,

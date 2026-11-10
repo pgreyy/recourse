@@ -8,7 +8,7 @@ import { gridTheme } from './gridTheme';
 export function nextStep(c: any): string | null {
   if (c.status === 'CLOSED') return null;
   if (c.verdict_state === 'NOT_ASSESSED') return 'Assess';
-  if (c.verdict_state === 'ASSESSED') return c.verdict === 'INCONCLUSIVE' ? 'Review evidence' : 'Approve ruling';
+  if (c.verdict_state === 'ASSESSED') return c.verdict === 'INCONCLUSIVE' ? 'Review evidence' : 'Approve decision';
   if (c.ruling_status === 'APPEALED') return 'Decide appeal';
   if (c.verdict === 'AGENT_FAULT' && !c.operator_accepted && c.settlement_status !== 'RECOVERED') return 'Operator acceptance';
   if (c.settlement_status && !['RECOVERED', 'COMPLETED', 'NO_ACTION'].includes(c.settlement_status)) return 'Settlement in progress';

@@ -42,21 +42,21 @@ export function Buyer() {
     <main className="page">
       <div className="page-head">
         <div>
-          <h1>Buyer mandate</h1>
+          <h1>Buyer instructions</h1>
           <p>Say what the agent may buy, in plain English. Recourse compiles it into rules, and the agent can only buy within them. Approve once with PayPal; Recourse signs the rules.</p>
         </div>
         {id && (
           <button className="btn secondary" onClick={() => navigate('/buyer')}>
-            New mandate
+            New instructions
           </button>
         )}
       </div>
       {paypal === 'approved' && d?.status === 'ACTIVE' && (
         <div className="notice" role="status" style={{ marginBottom: 16 }}>
-          PayPal approval received. The mandate is signed and active.
+          PayPal approval received. The instructions are signed and active.
         </div>
       )}
-      {paypal === 'cancelled' && <div className="notice warn" role="status" style={{ marginBottom: 16 }}>PayPal approval was cancelled. The mandate is still a draft.</div>}
+      {paypal === 'cancelled' && <div className="notice warn" role="status" style={{ marginBottom: 16 }}>PayPal approval was cancelled. The instructions are still a draft.</div>}
       <div className="grid2" style={{ alignItems: 'start' }}>
         <section className="card" aria-labelledby="words-title">
           <div className="card-head">
@@ -123,7 +123,7 @@ export function Buyer() {
                     <button className="btn paypal" onClick={approve} disabled={busy !== null}>
                       {busy === 'approve' ? 'Opening PayPal…' : 'Approve with PayPal'}
                     </button>
-                    <span className="small muted">Saves your PayPal for this mandate only. Nothing is charged now.</span>
+                    <span className="small muted">Saves your PayPal for these instructions only. Nothing is charged now.</span>
                   </div>
                 )}
                 {d.status !== 'DRAFT' && (
@@ -133,7 +133,7 @@ export function Buyer() {
                       <Status tone={d.signature_valid ? 'ok' : 'bad'}>{d.signature_valid ? 'Valid' : 'Not valid'}</Status>
                       <span className="small muted">{d.signing_key_id}</span>
                     </dd>
-                    <dt>Mandate hash</dt>
+                    <dt>Hash</dt>
                     <dd>
                       <Id title={d.mandate_hash}>{short(d.mandate_hash, 24)}</Id>
                     </dd>

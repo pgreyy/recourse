@@ -1,5 +1,5 @@
 import type { RecorderEntry } from '../evidence/recorder';
-import { fixPlural, plural } from '../shared/words';
+import { fixPlural, instructionWords, plural } from '../shared/words';
 import { DEMO_MERCHANT, readCatalogFile } from '../transaction/catalog';
 
 /** One row of the timeline as the screens show it. A recorder entry can give more than one row (for example a cart
@@ -87,6 +87,7 @@ type Issue = { message?: string; variant_id?: string | null; specific_issue?: st
  *  earlier one (the agent switching to the merchant's suggested substitute). */
 export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
   const suggested = new Set<string>();
+  let cart: Line[] = []; // the latest cart the merchant returned
   const out: TimelineRow[] = [];
   for (const e of entries) {
     const p = e.payload as any;
@@ -96,8 +97,9 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
       sub: sub || undefined,
       kind: e.kind,
       recorded_at: e.created_at,
-      title,
-      detail: fixPlural(detail),
+      title: instructionWords(title),
+      // Quotes (the agent's reason, the merchant's message, the buyer's words) are shown as written.
+      detail: /^“|^Merchant's message:/.test(detail) ? detail : instructionWords(fixPlural(detail)),
       tone,
       payload: e.payload,
       hash: e.hash,
@@ -105,7 +107,7 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
     const items = (list?: Array<{ variant_id: string; quantity?: number }>) => (list ?? []).map((i) => itemWords(i.variant_id)).join(', ');
     switch (e.kind) {
       case 'agent.run.started':
-        out.push(row(`${p.agent?.name} v${p.agent?.version} started shopping`, `under mandate v${p.mandate?.version}, ${p.budget_remaining} left to spend${p.dry_run ? ', dry run (nothing is charged)' : ''}`));
+        out.push(row(`${p.agent?.name} v${p.agent?.version} started shopping`, `under instructions v${p.mandate?.version}, ${p.budget_remaining} left to spend${p.dry_run ? ', dry run (nothing is charged)' : ''}`));
         break;
       case 'agent.tool_call': {
         const why = reason(p.reasoning);
@@ -119,7 +121,14 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
           const took = (p.input?.items ?? []).some((i: { variant_id: string }) => suggested.has(i.variant_id));
           out.push(took ? row(`Agent accepted the merchant's suggestion: ${items(p.input?.items)}`, why, 'warn') : row(`Agent changed the cart to ${items(p.input?.items)}`, why));
         } else if (p.tool === 'checkout') {
-          out.push(row('Agent called checkout', why));
+          // A plain note written by code from the cart, instead of the agent's own shorthand.
+          const took = cart.filter((l) => suggested.has(l.variant_id));
+          const note = took.length
+            ? `Agent checked out the cart with the merchant's suggested item: ${took.map((l) => itemWords(l.variant_id, l.attributes)).join(', ')}`
+            : cart.length
+              ? `Agent checked out the cart: ${cart.map((l) => itemWords(l.variant_id, l.attributes)).join(', ')}`
+              : 'Agent checked out the cart';
+          out.push(row('Agent called checkout', note));
         } else {
           out.push(row(`Agent called ${p.tool}`, why));
         }
@@ -147,6 +156,7 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
       case 'merchant.cart.viewed': {
         const lines = (p.lines ?? []) as Line[];
         const issues = (p.validation_issues ?? []) as Issue[];
+        cart = lines;
         const what = e.kind.endsWith('created') ? 'Cart created' : e.kind.endsWith('updated') ? 'Cart updated' : 'Cart checked before payment';
         const out_ = lines.filter((l) => l.available === false);
         const words = lines.map((l) => itemWords(l.variant_id, l.attributes)).join(', ');
@@ -177,7 +187,7 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
         const blocks = checks.filter((c) => c.status === 'BLOCK' || c.status === 'FAIL' || c.status === 'VIOLATION');
         const title = blocks.length ? 'Firewall would block checkout (dry run)' : warns.length ? 'Firewall warning (dry run)' : 'Firewall would pass (dry run)';
         const found = (blocks.length ? blocks : warns).map((c) => c.detail).join('; ');
-        out.push(row(title, [found, draft ? 'The mandate is still a draft; a real run needs the buyer to approve it at PayPal' : ''].filter(Boolean).join('. '), blocks.length ? 'block' : warns.length ? 'warn' : 'ok'));
+        out.push(row(title, [found, draft ? 'The instructions are still a draft; a real run needs the buyer to approve them at PayPal' : ''].filter(Boolean).join('. '), blocks.length ? 'block' : warns.length ? 'warn' : 'ok'));
         break;
       }
       case 'checkout.started':
@@ -191,7 +201,7 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
         out.push(row('PayPal order created', `order ${p.paypal_order_id}${p.status ? `, ${String(p.status).toLowerCase()}` : ''}`, 'money'));
         break;
       case 'paypal.anchor.verified':
-        out.push(row(p.all_match ? 'Decision trail anchored in the PayPal order' : 'Anchor mismatch in the PayPal order', 'mandate hash and recorder head re-read from PayPal', p.all_match ? 'ok' : 'block'));
+        out.push(row(p.all_match ? 'Decision trail anchored in the PayPal order' : 'Anchor mismatch in the PayPal order', 'instructions hash and recorder head re-read from PayPal', p.all_match ? 'ok' : 'block'));
         break;
       case 'paypal.tracker.added':
         out.push(row('Tracking added at PayPal', p.tracking_number ?? ''));
@@ -232,10 +242,10 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
         out.push(row(`Assessed: ${verdictWords(p.verdict)}`, String(p.model ?? '').replace(/^\w+\//, '')));
         break;
       case 'ruling.approved':
-        out.push(row(`Ruling approved: ${verdictWords(p.verdict)}`, p.approved_by?.name ? `by ${p.approved_by.name}, signed by Recourse` : '', 'ok'));
+        out.push(row(`Decision approved: ${verdictWords(p.verdict)}`, p.approved_by?.name ? `by ${p.approved_by.name}, signed by Recourse` : '', 'ok'));
         break;
       case 'ruling.operator_accepted':
-        out.push(row('Operator accepted the ruling', p.appeal_waived ? `${p.accepted_by ?? ''}, appeal waived`.replace(/^, /, '') : (p.accepted_by ?? '')));
+        out.push(row('Operator accepted the decision', p.appeal_waived ? `${p.accepted_by ?? ''}, appeal waived`.replace(/^, /, '') : (p.accepted_by ?? '')));
         break;
       case 'settlement.obligation_created':
         out.push(row('Settlement due', `${String(p.kind ?? '').toLowerCase().replace(/_/g, ' ')} of ${money(p.amount)}`));

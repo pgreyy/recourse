@@ -7,7 +7,7 @@ comes from the API, the database or a live PayPal read; nothing is mocked. Scree
 The screenshots were retaken on 2026-11-10, after the demo reset, from a local copy of the database
 (a `pg_dump` of Neon loaded into Postgres 18) with scenarios A and B restored from the archive and A's
 reputation included. The agent run (`03`) is a dry run of Acme Shopper v1.3 on a draft mandate: a live
-run needs the buyer's approval at PayPal. The Clerk answers (`11`, `11b`, `11c`) are real gpt-5-nano
+run needs the buyer's approval at PayPal. The Clerk answers (`11`, `11b`, `11c`) are real gpt-5-mini
 answers on that copy. Neon itself holds the clean demo (no cases). The scorecard copy includes the
 2026-11-10 runs from Neon.
 
@@ -37,7 +37,7 @@ answers on that copy. Neon itself holds the clean demo (no cases). The scorecard
 - The mark is a notched seal with a return arrow ([logo-options.md](logo-options.md)); it is also the
   favicon and the receipt's header.
 - One collapsible sidebar holds all navigation: Walkthrough (1 Operator, 2 Buyer, 3 Agent run), Console
-  (Overview, Cases, Case detail, Agents and operators, Settlements, Scorecard), then For judges, Ask the
+  (Overview, Cases, Case detail, Agents and operators, Settlements, Scorecard), then Demo guide, Ask the
   Clerk and the PayPal sandbox marker. Expanded 248 px: the mark and wordmark, with a collapse icon at
   the right of the same row. Collapsed 64 px: icons with a label on hover or focus, and the mark itself
   is the expand button (on hover or focus it shows the expand icon). Both toggles are buttons with
@@ -76,19 +76,19 @@ answers on that copy. Neon itself holds the clean demo (no cases). The scorecard
 - A custom agent in the AG Studio Agent Framework: `createAiHarness` with one `directLlmRunner`
   agent (`web/src/console/clerk.tsx`). Studio owns the turn loop, the conversation and tool execution.
 - Each model turn goes through `POST /console/clerk/turn`, which calls OpenAI's Responses API. The
-  key and the model (`AI_CLERK_MODEL`, default `gpt-5-nano`) are set on the server; the page cannot
+  key and the model (`AI_CLERK_MODEL`; the demo uses `gpt-5-mini`, the default is `gpt-5-nano`) are set on the server; the page cannot
   choose them.
 - Tools (all `api.defineAiTool`, all read-only GETs): `query_cases`, `get_case`,
   `recovered_by_agent_version`, `get_settlements`, `get_reputation`, `get_scorecard`.
 - `propose_action` performs nothing. It shows a proposal card that links to the case, where only
   the **Approve ruling** and **Operator accepts** buttons act.
-- Code refuses a proposal that is already done or not possible: approving a ruling that is already
-  approved, approving a case not yet assessed, or an operator accepting a ruling that is not an
-  approved agent-fault ruling.
+- Code refuses a proposal that is already done or not possible: approving a decision that is already
+  approved, approving a case not yet assessed, or an operator accepting a decision that is not an
+  approved agent-fault decision.
 - The Clerk has its own panel because Studio's built-in chat panel is only available in edit mode,
   and edit mode would let a viewer move or delete widgets.
 
-Recorded checks (2026-11-10, gpt-5-nano):
+Recorded checks (2026-11-10, gpt-5-nano, before the wording change; the questions are quoted as asked):
 
 | Question | Tool calls | Answer |
 |---|---|---|

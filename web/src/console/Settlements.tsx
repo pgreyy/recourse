@@ -74,7 +74,7 @@ export function Settlements() {
           getRowId={(p) => p.data.id}
           onRowClicked={(e) => e.data && navigate(`/console?page=case&case=${e.data.case_id}`)}
           onCellKeyDown={(e: any) => e.event?.key === 'Enter' && e.data && navigate(`/console?page=case&case=${e.data.case_id}`)}
-          overlayNoRowsTemplate="No settlements yet. A settlement starts when a ruling is approved."
+          overlayNoRowsTemplate="No settlements yet. A settlement starts when a decision is approved."
         />
       </div>
     </div>
