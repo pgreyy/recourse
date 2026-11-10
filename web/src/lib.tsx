@@ -118,7 +118,13 @@ export function ErrorNote({ error }: { error?: Error | null }) {
   if (!error) return null;
   return (
     <div className="notice bad" role="alert">
-      <strong>{error instanceof ApiError ? error.code : 'Error'}:</strong> {error.message}
+      {error instanceof ApiError && error.code === 'DEMO_LIMIT' ? (
+        <>{error.message}</>
+      ) : (
+        <>
+          <strong>{error instanceof ApiError ? error.code : 'Error'}:</strong> {error.message}
+        </>
+      )}
     </div>
   );
 }

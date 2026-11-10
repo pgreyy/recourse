@@ -4,6 +4,7 @@ import { db } from '../../shared/db/pool';
 import { notFound, route } from '../../shared/http/errors';
 import { uuidParam } from '../../shared/http/ids';
 import { runAgent } from './runner';
+import { reserveAgentRun } from '../../shared/ai/budget';
 
 export const agentRoutes = Router();
 
@@ -23,6 +24,7 @@ agentRoutes.post(
   '/run',
   route(async (req, res) => {
     const body = RunBody.parse(req.body);
+    if (!body.dry_run) reserveAgentRun(req.ip ?? 'unknown');
     if (!body.async) return res.json(await runAgent(body.mandate_id, body.agent_version_id, { dryRun: body.dry_run, provider: body.provider }));
     let started!: (r: { run_id: string; case_ref: string }) => void;
     const startedP = new Promise<{ run_id: string; case_ref: string }>((resolve) => (started = resolve));

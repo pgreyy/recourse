@@ -1,6 +1,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
+import { reserveAiCall } from './budget';
 import { APICallError, generateText, Output, RetryError, type LanguageModel } from 'ai';
 import type { z } from 'zod';
 import { ConfigError, env, required } from '../../config';
@@ -99,6 +100,7 @@ export async function runWithFallback<T>(
   for (let i = 0; i < chain.length; i++) {
     const c = chain[i];
     const started = Date.now();
+    reserveAiCall(); // public demo credit cap; throws 429 DEMO_LIMIT before any provider call
     try {
       const value = await fn(c);
       console.log(

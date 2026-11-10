@@ -1,3 +1,4 @@
+import { recordAiCalls, requireAiBudget } from '../../shared/ai/budget';
 import { createHash, randomBytes } from 'node:crypto';
 import { generateText, isStepCount, tool } from 'ai';
 import { z } from 'zod';
@@ -177,6 +178,7 @@ export async function runAgent(mandateId: string, agentVersionId: string, opts: 
   const spec = mandate.spec as MandateSpec;
   const usage = await mandateUsage(mandate.lineage_id);
   const remaining = ((Math.round(Number(spec.max_total.value) * 100) - usage.spent_cents) / 100).toFixed(2);
+  requireAiBudget(MAX_STEPS); // refuse up front rather than stop a purchase half way
   const caseRef = `CASE-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomBytes(4).toString('hex').toUpperCase()}`;
   const run = (await db().query<{ id: string }>('INSERT INTO agent_runs (case_ref, mandate_id, agent_version_id, dry_run) VALUES ($1, $2, $3, $4) RETURNING id', [caseRef, mandate.id, av.id, dryRun])).rows[0];
   await appendEntry(caseRef, 'agent.run.started', {
@@ -223,6 +225,7 @@ export async function runAgent(mandateId: string, agentVersionId: string, opts: 
           : state.result?.status === 'FAILED'
             ? 'FAILED'
             : 'NO_PURCHASE';
+    recordAiCalls(Math.max(0, r.value.steps.length - 1)); // the first step was counted when the call started
     const finalText = r.value.text?.slice(0, 2000) ?? '';
     await appendEntry(caseRef, 'agent.run.finished', { run_id: run.id, outcome, final_text: finalText, steps: r.value.steps.length, tool_calls: state.toolCalls, model: `${r.provider}/${r.modelId}`, model_role: r.role, model_failures: r.failures });
     await db().query(

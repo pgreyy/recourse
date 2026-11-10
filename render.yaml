@@ -1,0 +1,78 @@
+# Render Blueprint: one web service for the Recourse API and the screens (served at /app).
+# No values live in this file: every variable is "sync: false", so Render asks for each one when the
+# Blueprint is created. Step by step: docs/render-setup.md.
+services:
+  - type: web
+    name: recourse
+    runtime: node
+    region: ohio            # same region as the Neon database (AWS us-east-2)
+    plan: starter           # a paid instance: it never sleeps, and it can run the pre-deploy migration
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci --include=dev && npm --prefix web ci --include=dev && npm run typecheck && npm run web:build
+    preDeployCommand: npm run migrate
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # PayPal sandbox app
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: WEBHOOK_ID
+        sync: false
+      # The public address: PayPal return and cancel URLs, receipt links and the webhook URL derive from it.
+      # Until it is set, Render's own RENDER_EXTERNAL_URL is used.
+      - key: PUBLIC_BASE_URL
+        sync: false
+      # Database and signing
+      - key: DATABASE_URL
+        sync: false
+      - key: RECOURSE_SIGNING_KEY
+        sync: false
+      # Models
+      - key: AI_PROVIDER
+        sync: false
+      - key: AI_MODEL
+        sync: false
+      - key: AI_FALLBACK_MODEL
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AI_OPENAI_MODEL
+        sync: false
+      - key: AI_PRIMARY
+        sync: false
+      - key: AI_ASSESS_MODEL
+        sync: false
+      - key: AI_OPENAI_AGENT_EFFORT
+        sync: false
+      - key: AI_CLERK_MODEL
+        sync: false
+      # Demo limits (defaults: 60 AI calls per hour in total, 3 agent runs per hour per visitor)
+      - key: AI_CALLS_PER_HOUR
+        sync: false
+      - key: AGENT_RUNS_PER_IP_PER_HOUR
+        sync: false
+      # Sandbox accounts (shown on /app/judges) and the currency
+      - key: BUYER_EMAIL
+        sync: false
+      - key: OPERATOR_EMAIL
+        sync: false
+      - key: JUDGE_BUYER_EMAIL
+        sync: false
+      - key: JUDGE_BUYER_PASSWORD
+        sync: false
+      - key: JUDGE_OPERATOR_EMAIL
+        sync: false
+      - key: JUDGE_OPERATOR_PASSWORD
+        sync: false
+      - key: CURRENCY
+        sync: false
+      # Optional: removes the AG Studio trial watermark (read when the screens are built)
+      - key: AG_STUDIO_LICENSE_KEY
+        sync: false

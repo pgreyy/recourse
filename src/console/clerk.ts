@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { env } from '../config';
+import { reserveAiCall } from '../shared/ai/budget';
 import { HttpError } from '../shared/http/errors';
 
 /**
@@ -60,6 +61,7 @@ export async function clerkTurn(body: z.infer<typeof ClerkTurn>) {
   if (body.responseFormat?.type === 'json' && body.responseFormat.schema) {
     request.text = { format: { type: 'json_schema', name: body.responseFormat.name ?? 'answer', schema: body.responseFormat.schema, strict: false } };
   }
+  reserveAiCall();
   const started = Date.now();
   const r = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',

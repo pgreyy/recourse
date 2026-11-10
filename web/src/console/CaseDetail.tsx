@@ -14,6 +14,7 @@ type Detail = {
   counterfactual: { note: string; snapshot_sha256: string | null; compliant_alternatives: any[] };
   injection_flags: Array<{ location: string; author: string; pattern: string; excerpt: string; note: string }>;
   settlement: any[];
+  verification: { verified_at: string; from_cache: boolean };
 };
 
 const CHECK_TONE: Record<string, 'ok' | 'warn' | 'bad' | 'neutral'> = { PASS: 'ok', UNVERIFIABLE: 'warn', WARN: 'warn', FAIL: 'bad', NOT_APPLICABLE: 'neutral', SKIPPED: 'neutral' };
@@ -55,10 +56,11 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
   const d = useLoad((signal) => api<Detail>(`/console/cases/${id}`, { signal }), [id]);
   const [dialog, setDialog] = useState<null | 'approve' | 'accept'>(null);
   const [busy, setBusy] = useState(false);
+  const [doing, setDoing] = useState('');
   const [err, setErr] = useState<Error | null>(null);
 
   if (d.error && !d.data) return <ErrorNote error={d.error} />;
-  if (!d.data) return <p className="loading">Loading the case. Recourse re-reads the PayPal order, capture and any dispute live, so this takes a few seconds.</p>;
+  if (!d.data) return <p className="loading">Loading the case…</p>;
   const { case: c, mandate, order, timeline, clauses, code_checks, counterfactual, injection_flags, settlement, chain } = d.data;
   const a = c.latest_assessment;
   const ruling = c.ruling;
@@ -71,8 +73,9 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
   const operatorLiable = ruling?.liable_party === 'OPERATOR';
   const canAccept = Boolean(operatorLiable && ruling?.status === 'RULING_APPROVED' && !ruling.operator_accepted_at);
 
-  async function run(fn: () => Promise<unknown>) {
+  async function run(fn: () => Promise<unknown>, what = '') {
     setBusy(true);
+    setDoing(what);
     setErr(null);
     try {
       await fn();
@@ -82,6 +85,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
       setErr(e as Error);
     } finally {
       setBusy(false);
+      setDoing('');
     }
   }
   const focusStep = (seq: number) => {
@@ -130,9 +134,19 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
                 by {ruling.approved_by_name}, {when(ruling.approved_at)}
               </span>
             ) : (
-              <button className="btn" disabled={!canApprove || busy} onClick={() => setDialog('approve')} title={approveWhy ?? undefined}>
-                Approve ruling
-              </button>
+              <>
+                <button
+                  className={`btn ${a ? 'secondary' : ''}`}
+                  disabled={busy}
+                  onClick={() => run(() => api(`/cases/${c.id}/assess`, { body: {} }), 'assess')}
+                  title="Code checks, then the assessment model, then validation in code"
+                >
+                  {doing === 'assess' ? 'Assessing… (about 30 s)' : a ? 'Re-assess' : 'Assess'}
+                </button>
+                <button className="btn" disabled={!canApprove || busy} onClick={() => setDialog('approve')} title={approveWhy ?? undefined}>
+                  Approve ruling
+                </button>
+              </>
             )}
             {operatorLiable &&
               (ruling.operator_accepted_at ? (
@@ -150,6 +164,12 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
           </div>
         </div>
         {!ruling && approveWhy && <p className="small muted" style={{ marginTop: 8, textAlign: 'right' }}>{approveWhy}</p>}
+        <p className="small muted row" style={{ marginTop: 10, gap: 10 }}>
+          <span>Last verified against PayPal at {when(d.data.verification.verified_at)}</span>
+          <button className="btn small secondary" disabled={busy} onClick={() => run(() => api(`/console/cases/${c.id}/verify`, { body: {} }), 'verify')}>
+            {doing === 'verify' ? 'Verifying with PayPal…' : 'Re-verify now'}
+          </button>
+        </p>
         {proposal && (
           <div className="notice" role="status" style={{ marginTop: 12 }}>
             The Clerk proposed: <strong>{proposal.replace(/_/g, ' ')}</strong>. It cannot act. Review the evidence below; only the buttons above carry it out.
@@ -332,7 +352,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
         </section>
       </div>
 
-      <SettlementPanel obligations={settlement} />
+      <SettlementPanel obligations={settlement} busy={busy} act={(path) => run(() => api(path, { body: {} }), 'settle')} />
 
       {dialog === 'approve' && (
         <PersonDialog
@@ -428,7 +448,7 @@ const ACTION_LABEL: Record<string, string> = {
 };
 const KIND_LABEL: Record<string, string> = { RECOVERY: 'Recovery', DISPUTE_RESPONSE: 'PayPal dispute response', NO_CHARGE: 'No charge', REVERSAL: 'Reversal' };
 
-function SettlementPanel({ obligations }: { obligations: any[] }) {
+function SettlementPanel({ obligations, busy, act }: { obligations: any[]; busy: boolean; act: (path: string) => void }) {
   return (
     <section className="card" aria-labelledby="settle-title">
       <div className="card-head">
@@ -449,6 +469,16 @@ function SettlementPanel({ obligations }: { obligations: any[] }) {
               <div className="row">
                 <SettlementStatus s={o.status} />
                 {o.status === 'RECOVERED' && <span className="small">{money(o.recovered)} recovered</span>}
+                {!['RECOVERED', 'COMPLETED', 'NO_ACTION'].includes(o.status) && (
+                  <button className="btn small" disabled={busy} onClick={() => act(`/settlements/${o.id}/execute`)} title="Runs the pre-checks, then the next PayPal action. Safe to repeat.">
+                    Run settlement
+                  </button>
+                )}
+                {o.actions.some((x: any) => x.status === 'SUCCEEDED' && x.confirmation !== 'confirmed') && (
+                  <button className="btn small secondary" disabled={busy} onClick={() => act(`/settlements/${o.id}/reconcile`)} title="Ask PayPal now instead of waiting for the webhook">
+                    Check with PayPal
+                  </button>
+                )}
               </div>
             </div>
             <table className="plain" aria-label="PayPal actions">

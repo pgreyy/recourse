@@ -30,6 +30,8 @@ import { consoleRoutes } from './console/routes';
 export function createApp() {
   const app = express();
   app.disable('x-powered-by');
+  // Behind Render's proxy: req.ip is the client address (used by the per-IP demo limit).
+  app.set('trust proxy', 1);
   // Webhooks take the raw body (signature verification), so they mount before the JSON parser.
   app.use('/webhooks/paypal', paypalWebhooks);
   app.use(express.json({ limit: '1mb' }));

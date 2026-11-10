@@ -23,6 +23,11 @@ const adapter: AgLlmAdapter = {
     })
       .then(async (r) => {
         const j = await r.json().catch(() => null);
+        // The public demo's AI limit: answer in the chat, plainly, instead of failing the run.
+        if (r.status === 429 && j?.name === 'DEMO_LIMIT') {
+          const id = crypto.randomUUID();
+          return { id, createdAt: Date.now(), status: 'completed' as const, output: [{ id, kind: 'output' as const, type: 'message' as const, role: 'assistant' as const, status: 'completed' as const, content: [{ type: 'text' as const, text: j.message, annotations: [] }] }] };
+        }
         if (!r.ok || !j) return { id: crypto.randomUUID(), createdAt: Date.now(), status: 'failed' as const, output: [], error: { code: j?.name ?? `HTTP_${r.status}`, message: j?.message ?? 'The Clerk could not reach the model.' } };
         return j as AgLlmResponse;
       })

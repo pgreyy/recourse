@@ -158,19 +158,28 @@ export async function recoveredByAgentVersion(days: number | null) {
 
 /** The case's signed mandate (re-checked now) and its recorder entries. */
 export async function caseContext(caseId: string) {
-  const c = (await db().query('SELECT case_ref, order_id FROM cases WHERE id = $1', [caseId])).rows[0];
-  const o = c?.order_id ? (await db().query('SELECT * FROM orders WHERE id = $1', [c.order_id])).rows[0] : null;
-  const m = o
-    ? (
-        await db().query(
+  const c = (
+    await db().query(
+      `SELECT o.*, o.id AS order_id, c.case_ref AS the_case_ref FROM cases c LEFT JOIN orders o ON o.id = c.order_id WHERE c.id = $1`,
+      [caseId],
+    )
+  ).rows[0];
+  const o = c?.order_id ? c : null;
+  // Mandate, recorder entries, checkpoints and receipt are independent: read them in parallel.
+  const [mq, entries, checkpoints, receipt] = await Promise.all([
+    o
+      ? db().query(
           `SELECT m.*, b.email AS buyer_email, pt.vault_id FROM mandates m JOIN buyers b ON b.id = m.buyer_id
            LEFT JOIN payment_tokens pt ON pt.id = m.payment_token_id WHERE m.id = $1`,
           [o.mandate_id],
         )
-      ).rows[0]
-    : null;
-  const entries = c ? await listEntries(c.case_ref) : [];
-  const chain = c ? verifyChain(c.case_ref, entries, await listCheckpoints(c.case_ref)) : null;
+      : Promise.resolve({ rows: [] as any[] }),
+    c ? listEntries(c.the_case_ref) : Promise.resolve([] as RecorderEntry[]),
+    c ? listCheckpoints(c.the_case_ref) : Promise.resolve([]),
+    o ? receiptPath(o.order_id) : Promise.resolve(null),
+  ]);
+  const m = mq.rows[0] ?? null;
+  const chain = c ? verifyChain(c.the_case_ref, entries, checkpoints) : null;
   return {
     mandate: m
       ? {
@@ -196,7 +205,7 @@ export async function caseContext(caseId: string) {
           paypal_order_id: o.paypal_order_id,
           paypal_capture_id: o.paypal_capture_id,
           compliance: o.compliance,
-          receipt_path: await receiptPath(o.id),
+          receipt_path: receipt,
         }
       : null,
     timeline: entries.map(entryView),

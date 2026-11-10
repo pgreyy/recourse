@@ -1,15 +1,15 @@
-// npm run webhook:register -- <public https base url>
+// npm run webhook:register [-- <public https base url>]   (default: PUBLIC_BASE_URL)
 // Points the PayPal webhook at <base>/webhooks/paypal. Updates the webhook named by WEBHOOK_ID in place
 // (same id, so signature checks keep working), or creates one and prints the WEBHOOK_ID to add to .env.
 import '../config';
-import { env } from '../config';
+import { config, env } from '../config';
 import { pp } from './http';
 
 const EVENT_TYPES = ['CUSTOMER.DISPUTE.CREATED', 'CUSTOMER.DISPUTE.UPDATED', 'CUSTOMER.DISPUTE.RESOLVED', 'INVOICING.INVOICE.PAID', 'PAYMENT.CAPTURE.REFUNDED', 'PAYMENT.CAPTURE.COMPLETED'];
 
 async function main() {
-  const base = (process.argv[2] ?? env('WEBHOOK_BASE_URL') ?? '').replace(/\/$/, '');
-  if (!/^https:\/\//.test(base)) throw new Error('Give the public https base URL, e.g. npm run webhook:register -- https://xyz.trycloudflare.com');
+  const base = (process.argv[2] ?? env('WEBHOOK_BASE_URL') ?? config.publicBaseUrl()).replace(/\/$/, '');
+  if (!/^https:\/\//.test(base)) throw new Error('Set PUBLIC_BASE_URL to the public https address (or pass it: npm run webhook:register -- https://your-app.onrender.com).');
   const url = `${base}/webhooks/paypal`;
   const id = env('WEBHOOK_ID');
   const types = EVENT_TYPES.map((name) => ({ name }));

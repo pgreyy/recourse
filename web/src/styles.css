@@ -53,7 +53,10 @@ a:hover { color: var(--accent-hover); }
 .topnav a[aria-current='page'] { color: #fff; border-bottom-color: #8fc4bd; }
 .topnav .step { font: 500 11px var(--mono); color: #9fb0ad; }
 .topnav a:focus-visible { outline-color: #fff; }
-.sandbox { margin-left: auto; font-size: 12px; color: #d6dcdb; border: 1px solid #4d5c5a; padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
+.judges-link { margin-left: auto; color: #fff; font-weight: 500; text-decoration: none; padding: 4px 10px; border-radius: 4px; border: 1px solid #8fc4bd; }
+.judges-link:hover, .judges-link[aria-current='page'] { color: #fff; background: #0b4f4a; }
+.judges-link:focus-visible { outline-color: #fff; }
+.sandbox { font-size: 12px; color: #d6dcdb; border: 1px solid #4d5c5a; padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
 .page { flex: 1; padding: 28px 32px 48px; max-width: 1360px; width: 100%; margin: 0 auto; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
 .page-head p { color: var(--ink-2); margin-top: 6px; max-width: 760px; }

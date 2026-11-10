@@ -5,6 +5,7 @@ import { Operator } from './screens/Operator';
 import { Buyer } from './screens/Buyer';
 import { AgentRun } from './screens/AgentRun';
 import { Home } from './screens/Home';
+import { Judges } from './screens/Judges';
 import './styles.css';
 
 // AG Studio and AG Grid are large: load them only when the console opens.
@@ -30,7 +31,7 @@ function App() {
   const { path } = useLocation();
   const section = '/' + (path.split('/')[1] ?? '');
   const screen =
-    section === '/operator' ? <Operator /> : section === '/buyer' ? <Buyer /> : section === '/agent' ? <AgentRun /> : section === '/console' ? (
+    section === '/operator' ? <Operator /> : section === '/buyer' ? <Buyer /> : section === '/agent' ? <AgentRun /> : section === '/judges' ? <Judges /> : section === '/console' ? (
       <Suspense fallback={<p className="loading">Loading the console…</p>}>
         <Console />
       </Suspense>
@@ -52,6 +53,9 @@ function App() {
             </Link>
           ))}
         </nav>
+        <Link to="/judges" className="judges-link" current={section === '/judges'}>
+          For judges
+        </Link>
         <span className="sandbox" title="Every PayPal call goes to the PayPal sandbox. No real money moves.">
           PayPal sandbox
         </span>
