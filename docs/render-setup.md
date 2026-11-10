@@ -24,9 +24,9 @@ without the ping, switch the service to a paid instance type (that needs a card 
 ## 3. Create the service from the Blueprint
 
 1. **New** (top right), then **Blueprint**.
-2. Pick **pgreyy/recourse**, branch **main**. Render finds `render.yaml` and shows one service, **recourse** (web,
+2. Pick **pgreyy/recourse**, branch **main**. Render finds `render.yaml` and shows one service, **getrecourse** (web,
    Free, Ohio).
-3. Give the Blueprint a name (`recourse`), then fill in the variables it lists. Copy each value from your local
+3. Give the Blueprint a name (`getrecourse`), then fill in the variables it lists. Copy each value from your local
    `.env`, line by line, without spaces around it:
 
    | Variable | Where the value comes from |
@@ -48,7 +48,7 @@ without the ping, switch the service to a paid instance type (that needs a card 
 
 4. **Apply**. The first build takes a few minutes. When the log ends with `Recourse API on http://localhost:10000`, the
    service is live. Render shows its address at the top of the service page, for example
-   `https://recourse-xxxx.onrender.com`. Opening `/health` there answers `{"ok":true}`.
+   `https://getrecourse.onrender.com` (the service name sets it). Opening `/health` there answers `{"ok":true}`.
 
 ## 4. Once the address exists
 
@@ -59,18 +59,18 @@ without the ping, switch the service to a paid instance type (that needs a card 
    project folder, run this with your Render address (it overrides `PUBLIC_BASE_URL` for this one command only; the
    local `.env` is not changed):
 
-       PUBLIC_BASE_URL=https://recourse-xxxx.onrender.com npm run webhook:sync
+       PUBLIC_BASE_URL=https://getrecourse.onrender.com npm run webhook:sync
 
    It updates the existing webhook (`WEBHOOK_ID` from the local `.env`, the same value Render has) to
-   `https://recourse-xxxx.onrender.com/webhooks/paypal`. You should see `PATCH webhook …: HTTP 200` and the six event
+   `https://getrecourse.onrender.com/webhooks/paypal`. You should see `PATCH webhook …: HTTP 200` and the six event
    types. From then on PayPal's webhooks go to Render, not to the laptop tunnel.
-3. **Check it.** Open `https://<address>/app/judges`, then `/app/console`. If the case page or the Clerk shows
+3. **Check it.** Open `https://getrecourse.onrender.com/app/judges`, then `/app/console`. If the case page or the Clerk shows
    "Demo limit reached", the hourly AI limit is working.
 
 ## 5. Keep it awake (cron-job.org)
 
 1. Go to https://cron-job.org and create a free account.
-2. **Create cronjob**. Title `recourse health`, URL `https://<address>/health`.
+2. **Create cronjob**. Title `recourse health`, URL `https://getrecourse.onrender.com/health`.
 3. Schedule: **Every 10 minutes**. Save, and leave the job enabled.
 4. After a few runs, the job's history shows status 200 each time.
 
