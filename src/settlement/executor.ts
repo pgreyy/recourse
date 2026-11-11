@@ -233,7 +233,7 @@ async function recoverFromOperator(
   }
   const amount = money(amountCents, currency).value;
   const charge = await runAction(
-    ob, caseRef, 'CHARGE_OPERATOR', { value: amount, currency }, { vault_id: token.vault_id, custom_id: ruling.id, invoice_id: caseRef, breakdown: { refunded: m$(refunded), unreturned_fee: m$(fee), fee_on_charge: m$(chargeFee), full_recovery: m$(full), capped: amountCents < full, fee_rate: rateWords(fees), fee_source: fees.source } },
+    ob, caseRef, 'CHARGE_OPERATOR', { value: amount, currency }, { vault_id: token.vault_id, custom_id: ruling.id, invoice_id: caseRef, breakdown: { booking_capture: m$(cents(capture?.seller_receivable_breakdown?.gross_amount?.value ?? order.total_value)), booking_capture_fee: m$(cents(capture?.seller_receivable_breakdown?.paypal_fee?.value ?? 0)), refund_fee_returned: m$(cents(refund?.seller_payable_breakdown?.paypal_fee?.value ?? 0)), refunded: m$(refunded), unreturned_fee: m$(fee), fee_on_charge: m$(chargeFee), full_recovery: m$(full), capped: amountCents < full, fee_rate: rateWords(fees), fee_source: fees.source } },
     async (key) => {
       const created = await createVaultOrder({ vaultId: token.vault_id, source: 'paypal', amount, currency, customId: ruling.id, invoiceId: caseRef, description: `Recourse ruling ${ruling.id} (${caseRef}): agent fault liability` }, key);
       if (created.status < 300 && created.body?.status !== 'COMPLETED') {
@@ -359,8 +359,21 @@ export async function whoPaid(ob: ObligationRow, actions: Array<Record<string, a
   // PayPal's fee on the recovery charge itself, from PayPal's capture record (kept by PayPal, not recovered).
   const capture = charge?.response?.purchase_units?.[0]?.payments?.captures?.[0];
   const recoveryFee = capture?.seller_receivable_breakdown?.paypal_fee?.value ? cents(capture.seller_receivable_breakdown.paypal_fee.value) : null;
-  // The merchant's net counts PayPal's fee on the recovery charge too (the charge is grossed up to cover it).
-  const merchantNet = charged - refunded - unreturnedFee - (recoveryFee ?? 0);
+  // The merchant's cash flows on this order, each from a PayPal record: the booking capture and the fee PayPal took on
+  // it, the refund and any fee PayPal returned on it, the operator charge and the fee PayPal took on that.
+  const bd = charge?.request?.breakdown ?? {};
+  const returnedFee = refund ? cents(refund.response?.seller_payable_breakdown?.paypal_fee?.value ?? bd.refund_fee_returned ?? 0) : 0;
+  const bookingGross = bd.booking_capture !== undefined ? cents(bd.booking_capture) : cents(ob.amount_value);
+  const bookingFee = bd.booking_capture_fee !== undefined ? cents(bd.booking_capture_fee) : unreturnedFee + returnedFee;
+  const flows = [
+    { label: 'booking captured', cents: bookingGross },
+    { label: 'PayPal fee on the booking', cents: -bookingFee },
+    ...(refund ? [{ label: 'refund to the buyer', cents: -refunded }, { label: 'fee PayPal returned on the refund', cents: returnedFee }] : []),
+    ...(charge ? [{ label: 'charge to the operator', cents: charged }, { label: 'PayPal fee on the operator charge', cents: -(recoveryFee ?? 0) }] : []),
+  ];
+  // Net cash on this order, and the loss against the booking price the merchant was paid before the refund.
+  const orderNet = flows.reduce((t, f) => t + f.cents, 0);
+  const merchantNet = orderNet - bookingGross;
   let agreement = null;
   if (ob.liability_agreement_id) {
     const la = (await db().query('SELECT version, per_incident_cap::text, aggregate_cap::text FROM liability_agreements WHERE id = $1', [ob.liability_agreement_id])).rows[0];
@@ -376,6 +389,10 @@ export async function whoPaid(ob: ObligationRow, actions: Array<Record<string, a
       received_from_operator: fmt(charged),
       net: fmt(merchantNet),
       made_whole: merchantNet >= 0,
+      loss_after_recovery: fmt(Math.max(0, -merchantNet)),
+      cash_flows: flows.map((f) => ({ label: f.label, amount: fmt(f.cents) })),
+      order_net: fmt(orderNet),
+      booking_price: fmt(bookingGross),
       calculation: charge?.request?.breakdown?.fee_on_charge ? charge.request.breakdown : null,
       paypal_fee_on_recovery: recoveryFee === null ? null : fmt(recoveryFee),
     },

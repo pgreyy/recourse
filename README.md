@@ -54,9 +54,9 @@ settlement.
 
 1. **The operator's responsibility, agreed in advance, capped, and recovered on PayPal.** The operator accepts a
    versioned liability agreement (for the demo: 400.00 USD per incident, 1,000.00 USD in total, a 72 hour appeal window)
-   and saves a PayPal payment method under it. After a human-approved decision, and once the operator accepts (or its
+   and saves a PayPal payment method for approved recoveries under this agreement. After a human-approved decision, and once the operator accepts (or its
    appeal window closes), Recourse refunds the buyer and charges the operator's saved PayPal within the signed cap,
-   enough to cover the refund and PayPal's fees on both payments, so the merchant nets 0.00. This
+   enough to cover the refund and PayPal's fees on both payments, so the merchant's loss after recovery is 0.00. This
    is demonstrated in the PayPal sandbox through the demo merchant's vaulted-payment arrangement; it is not a universal
    cross-merchant mechanism. Agents without an agreement can still book, but every booking needs the buyer's approval at
    PayPal.
@@ -77,7 +77,7 @@ click path. In short:
 
 | Scenario | What you do | What you see |
 | --- | --- | --- |
-| A: the agent's fault (about 6 min) | Approve the instructions "Refundable hotel in Lisbon, Nov 20 to 22, under $400 total, 4 stars or more", run Wayfare Booker v1.3, request a cancellation on the receipt, report the issue, then Assess, Approve decision, Accept (operator), Run settlement | The refundable rate is sold out; the merchant suggests its Flexible Saver rate with no refund policy; the agent takes it; the firewall warns and the booking goes ahead; the cancellation is refused; the decision is agent fault with Hotel Ribeira Alta's refundable rate (380.00) as the compliant alternative; the buyer is refunded and the operator charged; Recovered only once PayPal confirms; v1.3 moves to step-up |
+| A: the agent's fault (about 6 min) | Approve the instructions "Refundable hotel in Lisbon, Nov 20 to 22, under $400 total, 4 stars or more", run Wayfare Booker v1.3, request a cancellation on the receipt, report the issue, then Assess, Approve decision, Accept (operator), Run settlement | The refundable rate is sold out; the merchant suggests its Flexible Saver rate with no refund policy; the agent takes it; the firewall warns and the booking goes ahead; the cancellation is refused; the decision is agent fault with Hotel Ribeira Alta, refundable, 380.00 total (taxes included) as the compliant alternative; the buyer is refunded and the operator charged; Recovered only once PayPal confirms; v1.3 moves to step-up |
 | B: the careful agent (about 4 min) | Approve the same instructions again, run Wayfare Booker v2.0 | It refuses the rate with no refund policy and books Hotel Ribeira Alta's refundable rate; the firewall passes; the receipt says Compliant; no case |
 | The Clerk | Ask which agent version caused the most recovered losses this week, then ask it to refund a case | A read-only answer from the data; it cannot move money, and it states refunds and charges only from the settlement records, with their PayPal ids |
 
@@ -103,7 +103,7 @@ accountable, not part of Recourse's decision.)
 
 ```
   Buyer ── plain English ──▶ instruction rules ──▶ approve at PayPal (Vault) ──▶ signed instructions
-  Operator ── accepts liability agreement (caps, appeal window) ──▶ saves PayPal under it (Vault)
+  Operator ── accepts liability agreement (caps, appeal window) ──▶ saves a PayPal payment method for approved recoveries (Vault)
 
   Agent ── search, cart, checkout ──▶ Tidewell Stays ──▶ checkout firewall (code)
      │ every step                                          │ pass / warn / block
@@ -149,11 +149,11 @@ Every id below is a PayPal sandbox id from a run on the hosted demo on 2026-11-1
   `11F82770V8738410J`, capture `8L037640DL311431U`, 340.00 USD, booking confirmation TWS-C62E0A. All 11 evidence
   checks passed, including the decision log's head hash read back from the PayPal order. Tidewell Stays refused the
   cancellation (the rate is non-refundable); the buyer reported it on the receipt. The assessment found AGENT_FAULT on
-  clause `stay.refund_policy`, with Hotel Ribeira Alta's refundable rate (380.00) available at the decision step. After
+  clause `stay.refund_policy`, with Hotel Ribeira Alta, refundable, 380.00 total (taxes included) available at the decision step. After
   a person approved the decision and the operator accepted it: buyer refund `6M826989RN0922432` (340.00 USD, confirmed
   by a re-read from PayPal); operator charged order `71R16486NJ703452D`, capture `7EW87576HA7150919`, 352.36 USD (the
   refund plus the 12.36 USD PayPal fee the refund did not return), confirmed by webhook. Who paid what: buyer
-  refunded 340.00, operator charged 352.36 (647.64 USD left of its 1,000.00 USD cap), merchant short by 12.79: PayPal's
+  refunded 340.00, operator charged 352.36 (647.64 USD left of its 1,000.00 USD cap), merchant's loss after recovery 12.79: PayPal's
   fee on the operator charge, which that charge did not yet cover. v1.3 then moved to step-up ("recent confirmed agent
   fault").
 - **Scenario B, the careful agent.** Wayfare Booker v2.0, same instructions: it was offered the same Flexible Saver
@@ -194,7 +194,7 @@ Every id below is a PayPal sandbox id from a run on the hosted demo on 2026-11-1
 | API | Endpoints | For |
 | --- | --- | --- |
 | OAuth 2.0 | `/v1/oauth2/token` | Access tokens |
-| Vault v3 | `/v3/vault/setup-tokens`, `/v3/vault/payment-tokens` | The buyer saves PayPal for a set of instructions; the operator saves PayPal under its liability agreement |
+| Vault v3 | `/v3/vault/setup-tokens`, `/v3/vault/payment-tokens` | The buyer saves PayPal for a set of instructions; the operator saves a PayPal payment method for approved recoveries under its liability agreement |
 | Orders v2 | `/v2/checkout/orders`, `/capture`, `/track` | Agent bookings with `vault_id`, payer not present, with the anchor in `description` and `custom_id`; buyer-approval orders for blocked bookings; operator charges; tracking for shipped goods (stays record a booking confirmation instead) |
 | Payments v2 | `/v2/payments/captures/{id}`, `/refund`, `/v2/payments/refunds/{id}` | Buyer refunds, refundable cancellations, fee breakdowns, confirmation re-reads |
 | Invoicing v2 | `/v2/invoicing/invoices`, `/send`, `generate-next-invoice-number` | Fallback when an operator charge fails |

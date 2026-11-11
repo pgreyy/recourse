@@ -3,7 +3,7 @@ import { Who } from '../lib';
 export type WhoPaidData = {
   currency: string;
   buyer: { refunded: string; refund_id: string | null };
-  merchant: { refunded_to_buyer: string; paypal_fee_not_returned: string; received_from_operator: string; net: string; made_whole: boolean; paypal_fee_on_recovery: string | null; calculation?: Calculation | null };
+  merchant: { refunded_to_buyer: string; paypal_fee_not_returned: string; received_from_operator: string; net: string; made_whole: boolean; paypal_fee_on_recovery: string | null; calculation?: Calculation | null; loss_after_recovery: string; cash_flows: Array<{ label: string; amount: string }>; order_net: string; booking_price: string };
   operator: { charged: string; capture_id: string | null; agreement: null | { version: number; per_incident_cap: string; aggregate_cap: string; used: string; cap_remaining: string } };
 };
 
@@ -21,13 +21,17 @@ export function CalculationNote({ c, ccy }: { c: Calculation; ccy: string }) {
 
 const sign = (v: string) => (Number(v) > 0 ? `+${v}` : Number(v) < 0 ? v : '0.00');
 
+/** "Booking captured +340.00, PayPal fee on the booking -12.36, ... = 0.00": the merchant's PayPal cash flows. */
+const flowWords = (w: WhoPaidData) =>
+  `${w.merchant.cash_flows.map((f) => `${f.label} ${sign(f.amount)}`).join(', ')}: the merchant kept ${w.merchant.order_net} of the ${w.merchant.booking_price} booking price`;
+
 /** Who paid what, once settled: figures only from PayPal-confirmed settlement records. */
 export function WhoPaid({ w, compact }: { w: WhoPaidData; compact?: boolean }) {
   const ccy = w.currency;
   if (compact) {
     return (
       <span className="small" style={{ lineHeight: 1.35, display: 'block', whiteSpace: 'normal' }}>
-        Buyer <span className="mono">{sign(w.buyer.refunded)}</span> · Merchant <span className="mono">{w.merchant.net}</span> · Operator <span className="mono">-{w.operator.charged}</span>
+        Buyer <span className="mono">{sign(w.buyer.refunded)}</span> · Merchant's loss <span className="mono" title={flowWords(w)}>{w.merchant.loss_after_recovery}</span> · Operator <span className="mono">-{w.operator.charged}</span>
       </span>
     );
   }
@@ -44,13 +48,11 @@ export function WhoPaid({ w, compact }: { w: WhoPaidData; compact?: boolean }) {
             <td className="small muted">refunded{w.buyer.refund_id ? `, PayPal refund ${w.buyer.refund_id}` : ''}</td>
           </tr>
           <tr>
-            <th scope="row">Merchant</th>
-            <td className="num">{w.merchant.net} {ccy}</td>
-            <td className="small muted">
-              {w.merchant.made_whole ? 'made whole: ' : `short by ${w.merchant.net.replace('-', '')}: `}refunded {w.merchant.refunded_to_buyer}, PayPal kept {w.merchant.paypal_fee_not_returned} on the refund
-              {w.merchant.paypal_fee_on_recovery ? ` and ${w.merchant.paypal_fee_on_recovery} on the recovery charge` : ''}; received {w.merchant.received_from_operator} from the operator
-              {!w.merchant.made_whole && !w.merchant.calculation ? ' (this charge was made before the charge covered its own PayPal fee)' : ''}
+            <th scope="row">Merchant's loss after recovery</th>
+            <td className="num" title={flowWords(w)}>
+              {w.merchant.loss_after_recovery} {ccy}
             </td>
+            <td className="small muted">from PayPal's records of the capture, the refund and the operator charge</td>
           </tr>
           <tr>
             <th scope="row">Operator</th>
@@ -62,6 +64,10 @@ export function WhoPaid({ w, compact }: { w: WhoPaidData; compact?: boolean }) {
           </tr>
         </tbody>
       </table>
+      <p className="small muted how">
+        How this is calculated: {flowWords(w)}.
+        {!w.merchant.made_whole && !w.merchant.calculation ? ' This charge was made before the operator charge covered its own PayPal fee.' : ''}
+      </p>
       <p className="small muted">From PayPal-confirmed settlement records only.</p>
     </section>
   );

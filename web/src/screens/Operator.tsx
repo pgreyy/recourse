@@ -281,7 +281,7 @@ function Steps(p: {
       </li>
       <li className="row">
         <span className="mono muted">2</span>
-        <strong>Save the operator's PayPal under it</strong>
+        <strong>Save a PayPal payment method for approved recoveries under this agreement</strong>
         <span className="spacer" />
         {p.ready ? (
           <Status tone="ok">PayPal saved</Status>
@@ -294,7 +294,7 @@ function Steps(p: {
       {!p.ready && p.accepted && p.paymentStatus && p.paymentStatus !== 'NONE' && (
         <li className="small muted">The saved PayPal belongs to an earlier agreement version; approve again for this one.</li>
       )}
-      {p.ready && <li className="small muted">Ready. Agents covered by this agreement shop under normal policy.</li>}
+      {p.ready && <li className="small muted">Ready: the operator saved a PayPal payment method for approved recoveries under this agreement. Agents covered by it book under normal policy.</li>}
     </ol>
   );
 }

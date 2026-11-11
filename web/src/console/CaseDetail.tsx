@@ -281,6 +281,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
             <span className="n">3</span>
             <h2 id="col-concl">Conclusion</h2>
           </div>
+          <TrustOrder />
           <div className="card card-pad stack">
             {!a ? (
               <p className="muted">Not assessed yet.</p>
@@ -323,7 +324,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
                 </Block>
                 {(d.data.why_not ?? []).length > 0 && (
                   <div className="stack" style={{ gap: 4 }}>
-                    <h3>Why not the others</h3>
+                    <h3>Why not the merchant or the buyer?</h3>
                     <ul className="why-not">
                       {(d.data.why_not ?? [])
                         .filter((w) => w.verdict !== (c.ruling?.verdict ?? a.verdict))
@@ -418,6 +419,20 @@ function Block({ title, by, children }: { title: string; by: 'ai' | 'code'; chil
   );
 }
 
+/** The order of trust behind every decision, as a small strip. */
+function TrustOrder() {
+  const steps = ['AI proposes', 'Code verifies', 'a person approves', 'PayPal executes'];
+  return (
+    <ol className="trust-order" aria-label="Order of trust">
+      {steps.map((s, i) => (
+        <li key={s}>
+          <span className="mono">{i + 1}</span> {s.charAt(0).toUpperCase() + s.slice(1)}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function Snapshot({ order, cf }: { order: any; cf: Detail['counterfactual'] }) {
   const bought = order?.lines?.[0];
   const alt = cf?.compliant_alternatives?.[0];
@@ -447,10 +462,23 @@ function Snapshot({ order, cf }: { order: any; cf: Detail['counterfactual'] }) {
             <div className="small" style={{ color: 'var(--ok-ink)' }}>
               Compliant alternative, {alt.attributes?.stay ? 'available' : 'in stock'}
             </div>
-            <strong>{alt.name}</strong>
-            <div className="small">
-              {what(alt)}, {alt.price}, {alt.stock} {alt.attributes?.stay ? 'left' : 'in stock'}
-            </div>
+            {alt.attributes?.stay ? (
+              <>
+                <strong>
+                  {alt.attributes.stay.hotel}, {alt.attributes.stay.refund_policy === 'REFUNDABLE' ? 'refundable' : 'no refund policy given'}, {alt.price} total
+                </strong>
+                <div className="small">
+                  {alt.attributes.stay.check_in} to {alt.attributes.stay.check_out}, {alt.attributes.stay.stars ?? '?'} stars, taxes included, {alt.stock} left
+                </div>
+              </>
+            ) : (
+              <>
+                <strong>{alt.name}</strong>
+                <div className="small">
+                  {what(alt)}, {alt.price}, {alt.stock} in stock
+                </div>
+              </>
+            )}
             <div className="small muted mono">{alt.variant_id}</div>
           </div>
         ) : (

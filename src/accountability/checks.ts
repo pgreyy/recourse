@@ -99,6 +99,12 @@ export type Alternative = { variant_id: string; listing_id: string; name: string
  * Counterfactual (source: "code"): from the frozen snapshot used at the decision step, every in-stock
  * variant that passes every clause of the instructions with no warning. If one exists, a compliant alternative existed.
  */
+/** A hotel rate in one line, e.g. "Hotel Ribeira Alta, refundable, 380.00 total" (totals include taxes). */
+export function stayRateWords(stay: { hotel: string; refund_policy: string | null }, price: string): string {
+  const refund = stay.refund_policy === 'REFUNDABLE' ? 'refundable' : stay.refund_policy === 'NON_REFUNDABLE' ? 'non-refundable' : 'no refund policy given';
+  return `${stay.hotel}, ${refund}, ${price} total`;
+}
+
 export function counterfactual(m: CaseMaterial): { source: 'code'; snapshot_sha256: string | null; compliant_alternatives: Alternative[]; note: string } {
   if (!m.snapshot) return { source: 'code', snapshot_sha256: null, compliant_alternatives: [], note: 'no decision snapshot available' };
   const fw = [...m.recorder.entries].reverse().find((e) => e.kind === 'checkout.firewall' && e.seq < m.order.anchor_seq);
@@ -137,7 +143,7 @@ export function counterfactual(m: CaseMaterial): { source: 'code'; snapshot_sha2
     compliant_alternatives: alternatives,
     note: alternatives.length
       ? alternatives[0].attributes.stay
-        ? `${plural(alternatives.length, 'available rate')} satisfied every clause of the instructions at the decision step, e.g. ${alternatives[0].name} at ${alternatives[0].price}`
+        ? `${plural(alternatives.length, 'available rate')} satisfied every clause of the instructions at the decision step, e.g. ${stayRateWords(alternatives[0].attributes.stay, alternatives[0].price)}`
         : `${plural(alternatives.length, 'in-stock listing')} satisfied every clause of the instructions at the decision step, e.g. ${alternatives[0].name} ${alternatives[0].attributes.unit_system ?? ''} ${alternatives[0].attributes.size} at ${alternatives[0].price}`
       : 'nothing in stock satisfied every clause of the instructions at the decision step',
   };

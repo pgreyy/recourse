@@ -7,6 +7,7 @@ export type Entry = {
   recorded_at: string;
   title: string;
   detail: string;
+  evidence?: string[];
   tone: 'normal' | 'warn' | 'block' | 'money' | 'ok';
   payload: unknown;
   hash: string;
@@ -31,6 +32,13 @@ export function Timeline({ entries, highlight = [], fresh, dimAfter, idPrefix = 
                 {TONE_WORD[e.tone] && e.tone !== 'money' && <span className="sr-only"> ({TONE_WORD[e.tone]})</span>}
               </div>
               {e.detail && <div className="t-detail">{e.detail}</div>}
+              {e.evidence?.length ? (
+                <ul className="t-evidence" aria-label="Evidence at this step">
+                  {e.evidence.map((x) => (
+                    <li key={x}>{x}</li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </li>
         );

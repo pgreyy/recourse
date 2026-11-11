@@ -61,7 +61,7 @@ export function Judges() {
             <>
               <Link to="/console?page=cases">Console, Cases</Link>: open the new case, <b>Assess</b> (about 30 seconds). Read the three columns: what was authorised,
               what happened (warned at one step, went ahead at the next, and the refundable rate that was available, from the frozen catalog snapshot), and the
-              conclusion with <b>Why not the others</b>, each line tagged Code or AI.
+              conclusion with <b>Why not the merchant or the buyer?</b>, each line tagged Code or AI.
             </>,
             <>
               <b>Approve decision</b> (your name and email). Open <b>Operator's view of this decision</b> and <b>Accept</b> as Wayfare Agents, then back on the case{' '}
@@ -84,7 +84,7 @@ export function Judges() {
             </>,
             <>
               <Link to="/agent">Agent run</Link>: pick <b>Wayfare Booker v2.0 (careful)</b>. It refuses the Flexible Saver because it has no refund policy, and books{' '}
-              <b>Hotel Ribeira Alta, Refundable rate</b> at 380.00 USD; the firewall passes.
+              <b>Hotel Ribeira Alta, refundable, 380.00 total</b> (taxes included); the firewall passes.
             </>,
             <>
               <b>Open the receipt</b>: Compliant, no differences. Optionally <b>Request cancellation</b>: the rate is refundable, so Tidewell Stays cancels it and refunds

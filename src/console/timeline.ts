@@ -13,6 +13,8 @@ export type TimelineRow = {
   recorded_at: Date | string;
   title: string;
   detail: string;
+  /** Pieces of evidence shown together under the row (e.g. where the firewall warned on a rate's refund policy). */
+  evidence?: string[];
   tone: 'normal' | 'warn' | 'block' | 'money' | 'ok';
   payload: unknown;
   hash: string;
@@ -20,13 +22,13 @@ export type TimelineRow = {
 
 type Attrs = { size?: string | null; unit_system?: string | null; gender?: string | null; stay?: import('../transaction/catalog').Stay };
 
-let names: Map<string, { name: string; attrs: Attrs }> | null = null;
+let names: Map<string, { name: string; attrs: Attrs; description: string }> | null = null;
 function catalog() {
   if (!names) {
     names = new Map();
     try {
       for (const f of CATALOG_FILES) {
-        for (const l of readCatalogFile(resolve(process.cwd(), f)).listings) for (const v of l.variants) names.set(v.id, { name: l.name, attrs: v.stay ? { ...v.attributes, stay: v.stay } : v.attributes });
+        for (const l of readCatalogFile(resolve(process.cwd(), f)).listings) for (const v of l.variants) names.set(v.id, { name: l.name, attrs: v.stay ? { ...v.attributes, stay: v.stay } : v.attributes, description: v.description ?? '' });
       }
     } catch {
       /* no catalog file: fall back to the id below */
@@ -34,6 +36,23 @@ function catalog() {
   }
   return names;
 }
+/**
+ * Where the firewall could not verify a rate's refund policy: the three facts side by side, from the cart (the
+ * structured refund policy), the merchant's own rate description, and the firewall's finding.
+ */
+function refundEvidence(checks: Array<{ rule: string; status: string }>, lines: Line[]): string[] | undefined {
+  const flagged = checks.some((c) => c.rule === 'stay.refund_policy' && c.status !== 'PASS');
+  const line = lines.find((l) => l.attributes?.stay);
+  if (!flagged || !line?.attributes?.stay) return undefined;
+  const policy = line.attributes.stay.refund_policy;
+  const said = catalog().get(line.variant_id)?.description.match(/[^.]*\b(non-?refundable|no refunds?|refund)[^.]*\./i)?.[0]?.trim();
+  return [
+    `Refund policy: ${policy === null || policy === undefined ? 'not provided' : policy === 'NON_REFUNDABLE' ? 'non-refundable' : policy.toLowerCase()}`,
+    ...(said ? [`Description: "${said}"`] : []),
+    `Firewall: refundability can't be verified`,
+  ];
+}
+
 export const isKnownVariant = (id: string) => catalog().has(id);
 /** Product names from the merchant's catalog file, so the timeline never shows a raw variant id. */
 function productName(variantId: string): string {
@@ -98,7 +117,8 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
   const out: TimelineRow[] = [];
   for (const e of entries) {
     const p = e.payload as any;
-    const row = (title: string, detail = '', tone: TimelineRow['tone'] = 'normal', sub = false): TimelineRow => ({
+    const row = (title: string, detail = '', tone: TimelineRow['tone'] = 'normal', sub = false, evidence?: string[]): TimelineRow => ({
+      ...(evidence?.length ? { evidence } : {}),
       key: sub ? `${e.seq}.${out.length}` : String(e.seq),
       seq: e.seq,
       sub: sub || undefined,
@@ -187,7 +207,7 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
         const blocks = checks.filter((c) => c.status === 'BLOCK' || c.status === 'FAIL');
         const title = blocks.length ? 'Firewall blocked checkout' : warns.length ? 'Firewall warning' : 'Firewall passed';
         const detail = (blocks.length ? blocks : warns).map((c) => c.detail).join('; ') || `all ${plural(checks.length, 'check')} passed`;
-        out.push(row(title, detail, blocks.length ? 'block' : warns.length ? 'warn' : 'ok'));
+        out.push(row(title, detail, blocks.length ? 'block' : warns.length ? 'warn' : 'ok', false, refundEvidence(checks, cart)));
         break;
       }
       case 'checkout.dry_run': {
@@ -199,11 +219,11 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
         const blocks = checks.filter((c) => c.status === 'BLOCK' || c.status === 'FAIL' || c.status === 'VIOLATION');
         const title = blocks.length ? 'Firewall would block checkout (dry run)' : warns.length ? 'Firewall warning (dry run)' : 'Firewall would pass (dry run)';
         const found = (blocks.length ? blocks : warns).map((c) => c.detail).join('; ');
-        out.push(row(title, [found, draft ? 'The instructions are still a draft; a real run needs the buyer to approve them at PayPal' : ''].filter(Boolean).join('. '), blocks.length ? 'block' : warns.length ? 'warn' : 'ok'));
+        out.push(row(title, [found, draft ? 'The instructions are still a draft; a real run needs the buyer to approve them at PayPal' : ''].filter(Boolean).join('. '), blocks.length ? 'block' : warns.length ? 'warn' : 'ok', false, refundEvidence(checks, cart)));
         break;
       }
       case 'checkout.started':
-        if (p.proceeded_despite_warnings) out.push(row('Checkout went ahead despite the warning', `the warning at step ${p.proceeded_despite_warnings.warning_entry_seq} was not resolved`, 'warn'));
+        if (p.proceeded_despite_warnings) out.push(row(cart.some((l) => l.attributes?.stay) ? 'Agent booked anyway' : 'Checkout went ahead despite the warning', `the warning at step ${p.proceeded_despite_warnings.warning_entry_seq} was not resolved`, 'warn'));
         else out.push(row('Checkout started', (p.lines ?? []).map((l: Line & { name?: string }) => `${l.name ?? productName(l.variant_id)}${l.attributes ? `, ${sizeWords(l.attributes)}` : ''}`).join(', ')));
         break;
       case 'checkout.step_up_required':

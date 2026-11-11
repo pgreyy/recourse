@@ -134,7 +134,7 @@ export function OperatorDecision() {
             )}
             {(d.data.why_not ?? []).length > 0 && (
               <div className="stack" style={{ gap: 4 }}>
-                <h3>Why not the others</h3>
+                <h3>Why not the merchant or the buyer?</h3>
                 <ul className="why-not">
                   {d.data.why_not
                     .filter((w: any) => w.verdict !== (ruling?.verdict ?? a?.verdict))
