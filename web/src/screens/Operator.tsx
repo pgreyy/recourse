@@ -25,7 +25,7 @@ export function Operator() {
           <BackButton />
           <h1>Operator onboarding</h1>
           <p>
-            An agent operator signs a liability agreement before its agents shop. It sets how much Recourse may recover from the operator when its agent breaks a
+            An agent operator signs a liability agreement before its agents book or buy. It sets how much Recourse may recover from the operator when its agent breaks a
             buyer's instructions, and how the operator can appeal.
           </p>
         </div>
@@ -157,7 +157,7 @@ function OperatorDetail({ id }: { id: string }) {
             <dt>
               <Status tone="ok">Covered</Status>
             </dt>
-            <dd>Covered agents shop under normal checkout policy.</dd>
+            <dd>Covered agents transact under normal policy.</dd>
             <dt>
               <Status tone="warn">Not covered</Status>
             </dt>

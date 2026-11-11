@@ -135,7 +135,7 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
     switch (e.kind) {
       case 'agent.run.started':
         if (p.merchant?.name) merchantName = p.merchant.name;
-        out.push(row(`${p.agent?.name} v${p.agent?.version} started ${p.merchant?.id === 'tidewell-stays' ? 'booking' : 'shopping'}`, `under instructions v${p.mandate?.version}, ${p.budget_remaining} left to spend${p.dry_run ? ', dry run (nothing is charged)' : ''}`));
+        out.push(row(`${p.agent?.name} v${p.agent?.version} started ${p.merchant?.id === 'tidewell-stays' ? 'booking' : 'buying'}`, `under instructions v${p.mandate?.version}, ${p.budget_remaining} left to spend${p.dry_run ? ', dry run (nothing is charged)' : ''}`));
         break;
       case 'agent.tool_call': {
         const why = reason(p.reasoning);
@@ -224,7 +224,19 @@ export function timelineView(entries: RecorderEntry[]): TimelineRow[] {
       }
       case 'checkout.started':
         if (p.proceeded_despite_warnings) out.push(row(cart.some((l) => l.attributes?.stay) ? 'Agent booked anyway' : 'Checkout went ahead despite the warning', `the warning at step ${p.proceeded_despite_warnings.warning_entry_seq} was not resolved`, 'warn'));
-        else out.push(row('Checkout started', (p.lines ?? []).map((l: Line & { name?: string }) => `${l.name ?? productName(l.variant_id)}${l.attributes ? `, ${sizeWords(l.attributes)}` : ''}`).join(', ')));
+        else
+          out.push(
+            row(
+              'Checkout started',
+              (p.lines ?? [])
+                .map((l: Line & { name?: string }) => {
+                  // No trailing comma when there is nothing to add (a refundable rate has no extra words).
+                  const extra = l.attributes ? sizeWords(l.attributes) : '';
+                  return `${l.name ?? productName(l.variant_id)}${extra ? `, ${extra}` : ''}`;
+                })
+                .join('; '),
+            ),
+          );
         break;
       case 'checkout.step_up_required':
         out.push(row('Buyer approval required at PayPal', (p.violations ?? []).map((v: { detail: string }) => v.detail).join('; '), 'block'));

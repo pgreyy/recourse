@@ -1,4 +1,4 @@
-import { api, ErrorNote, money, navigate, Policy, Status, useLoad, when, plural } from '../lib';
+import { api, ErrorNote, money, navigate, Policy, Status, useLoad, when, plural, amount } from '../lib';
 
 export function Reputation() {
   const r = useLoad((signal) => api<{ agents: any[]; operators: any[] }>('/console/agents', { signal }), []);
@@ -80,10 +80,10 @@ export function Reputation() {
                     </td>
                     <td className="num">{o.accountability === null || o.accountability === undefined ? '—' : o.accountability.toFixed(2)}</td>
                     <td className="small muted">
-                      {o.basis.obligations_paid} paid ({o.basis.paid_amount}), {o.basis.obligations_failed} failed
+                      {o.basis.obligations_paid} paid ({amount(o.basis.paid_amount)}), {o.basis.obligations_failed} failed
                     </td>
                     <td>
-                      {plural(o.outstanding_exposure.obligations, 'obligation')}, {o.outstanding_exposure.amount}
+                      {plural(o.outstanding_exposure.obligations, 'obligation')}, {amount(o.outstanding_exposure.amount)}
                     </td>
                     <td className="small">
                       {o.agreement ? (

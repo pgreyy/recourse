@@ -27,7 +27,7 @@ export function AttentionList() {
       { headerName: 'Opened by', valueGetter: (p) => (p.data?.source === 'PAYPAL_DISPUTE' ? 'PayPal dispute' : 'Buyer report'), minWidth: 130 },
       { headerName: 'Agent', valueGetter: (p) => p.data?.agent ?? '—', minWidth: 140 },
       { headerName: 'Amount', type: 'rightAligned', valueGetter: (p) => p.data?.amount, valueFormatter: (p) => money(p.value), minWidth: 110, maxWidth: 130 },
-      { headerName: 'Verdict', valueGetter: (p) => verdictLabel(p.data?.verdict), minWidth: 150, cellRenderer: (p: any) => <Verdict v={p.data?.verdict} /> },
+      { headerName: 'Finding', valueGetter: (p) => verdictLabel(p.data?.verdict), minWidth: 150, cellRenderer: (p: any) => <Verdict v={p.data?.verdict} /> },
       { headerName: 'Settlement', valueGetter: (p) => p.data?.settlement_status, minWidth: 160, cellRenderer: (p: any) => <SettlementStatus s={p.data?.settlement_status} /> },
       { headerName: 'Waiting for', field: 'step', minWidth: 170, cellStyle: { fontWeight: 600 } },
     ],

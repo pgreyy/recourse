@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, BackButton, ErrorNote, Modal, money, navigate, Status, useLoad, useLocation, Verdict, when, Who } from '../lib';
+import { api, BackButton, ErrorNote, Modal, money, navigate, Status, useLoad, useLocation, Verdict, when, Who, amount } from '../lib';
 import { PersonDialog } from '../console/CaseDetail';
 import { WhoPaid } from '../console/WhoPaid';
 
@@ -158,11 +158,11 @@ export function OperatorDecision() {
                   Who would pay what <Who by="code" />
                 </h3>
                 <p>
-                  Buyer refunded <strong className="mono">{pv.buyer_refund} {pv.currency}</strong>.
+                  Buyer refunded <strong className="mono">{amount(pv.buyer_refund, pv.currency)}</strong>.
                 </p>
                 <p>
-                  {v.data.operator?.name ?? 'The operator'} charged <strong className="mono">{pv.operator_charge_from} {pv.currency}</strong> plus PayPal's fee on this charge, so the merchant ends as it would after an undisputed sale
-                  {pv.operator_charge_limit ? `, never more than ${pv.operator_charge_limit} ${pv.currency}` : ''}.
+                  {v.data.operator?.name ?? 'The operator'} charged <strong className="mono">{amount(pv.operator_charge_from, pv.currency)}</strong> plus PayPal's fee on this charge, so the merchant ends as it would after an undisputed sale
+                  {pv.operator_charge_limit ? `, never more than ${amount(pv.operator_charge_limit, pv.currency)}` : ''}.
                 </p>
                 <p className="small muted">Exact figures appear here once PayPal confirms the refund and the charge.</p>
               </div>
@@ -172,11 +172,11 @@ export function OperatorDecision() {
                 <dt>Agreement</dt>
                 <dd>v{ag.version}</dd>
                 <dt>Per incident</dt>
-                <dd className="mono">{ag.per_incident_cap} {ag.currency}</dd>
+                <dd className="mono">{amount(ag.per_incident_cap, ag.currency)}</dd>
                 <dt>Total cap</dt>
-                <dd className="mono">{ag.aggregate_cap} {ag.currency}</dd>
+                <dd className="mono">{amount(ag.aggregate_cap, ag.currency)}</dd>
                 <dt>Cap remaining</dt>
-                <dd className="mono">{ag.cap_remaining} {ag.currency}</dd>
+                <dd className="mono">{amount(ag.cap_remaining, ag.currency)}</dd>
                 <dt>Appeal window</dt>
                 <dd>{ag.appeal_window_hours} hours</dd>
               </dl>

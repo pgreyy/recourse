@@ -142,7 +142,7 @@ export async function executeObligation(obligationId: string) {
   };
 
   // Always: only approved rulings, never a reversed or appealed one.
-  if (!check('ruling.approved', ruling.status === 'RULING_APPROVED' || ruling.status === 'SETTLED', `ruling ${ruling.status}`)) return done(ob.status, 'ruling is not in force (appealed or reversed)');
+  if (!check('ruling.approved', ruling.status === 'RULING_APPROVED' || ruling.status === 'SETTLED', `decision ${ruling.status === 'RULING_APPROVED' ? 'approved' : ruling.status.toLowerCase()}`)) return done(ob.status, 'decision is not in force (appealed or reversed)');
   if (ob.status === 'RECOVERED' || ob.status === 'COMPLETED' || ob.status === 'NO_ACTION') return { obligation_id: ob.id, status: ob.status, note: 'nothing left to do', checks };
   if (ob.kind === 'NO_CHARGE') return done('NO_ACTION', `${ob.verdict}: nobody is charged`);
 
@@ -157,7 +157,7 @@ export async function executeObligation(obligationId: string) {
     if (!check('operator.charge_exists', Boolean(opCapture), opCapture ? `operator capture ${opCapture}` : 'no operator charge to reverse')) return done('NO_ACTION', 'nothing was charged');
     const a = await runAction(
       ob, caseRef, 'REFUND_OPERATOR', { value: ob.amount_value, currency }, { capture_id: opCapture },
-      (key) => refundCapture(opCapture!, { value: ob.amount_value, currency }, key, 'Recourse: ruling reversed on appeal'),
+      (key) => refundCapture(opCapture!, { value: ob.amount_value, currency }, key, 'Recourse: decision reversed on appeal'),
       (r) => ({ refund_id: r.body?.id ?? null, capture_id: opCapture! }),
     );
     return done(a.status === 'SUCCEEDED' ? 'COMPLETED' : 'FAILED', a.status === 'SUCCEEDED' ? `operator refunded (${a.paypal_ids.refund_id})` : a.error ?? 'refund failed');
@@ -176,7 +176,7 @@ export async function executeObligation(obligationId: string) {
     // The buyer refund never waits for the operator.
     const refund = await runAction(
       ob, caseRef, 'REFUND_BUYER', { value: order.total_value, currency }, { capture_id: captureId, full: true },
-      (key) => refundCapture(captureId, { value: order.total_value, currency }, key, `Recourse ruling on ${caseRef}: full refund`),
+      (key) => refundCapture(captureId, { value: order.total_value, currency }, key, `Recourse decision on ${caseRef}: full refund`),
       (r) => ({ refund_id: r.body?.id ?? null, capture_id: captureId }),
       (r) => r.status < 300 && ['COMPLETED', 'PENDING'].includes(r.body?.status),
     );
@@ -206,7 +206,7 @@ async function recoverFromOperator(
   // Operator recovery waits for the operator's acceptance or the end of the appeal window.
   const accepted = Boolean(ruling.operator_accepted_at);
   const windowOver = ruling.appeal_deadline && new Date(ruling.appeal_deadline) <= new Date();
-  if (!check('approvals.operator_recovery', accepted || windowOver, accepted ? `operator accepted the ruling at ${new Date(ruling.operator_accepted_at).toISOString()}` : `waiting: appeal window ends ${new Date(ruling.appeal_deadline).toISOString()}`)) {
+  if (!check('approvals.operator_recovery', accepted || windowOver, accepted ? `operator accepted the decision at ${new Date(ruling.operator_accepted_at).toISOString()}` : `waiting: appeal window ends ${new Date(ruling.appeal_deadline).toISOString()}`)) {
     return done('BUYER_REFUNDED', 'buyer refunded; operator recovery waits for acceptance or the end of the appeal window');
   }
   const coverage = ob.agent_version_id ? await agentCoverage(ob.agent_version_id) : null;
@@ -236,7 +236,7 @@ async function recoverFromOperator(
   const charge = await runAction(
     ob, caseRef, 'CHARGE_OPERATOR', { value: amount, currency }, { vault_id: token.vault_id, custom_id: ruling.id, invoice_id: caseRef, breakdown: { booking_capture: m$(cents(capture?.seller_receivable_breakdown?.gross_amount?.value ?? order.total_value)), booking_capture_fee: m$(cents(capture?.seller_receivable_breakdown?.paypal_fee?.value ?? 0)), refund_fee_returned: m$(cents(refund?.seller_payable_breakdown?.paypal_fee?.value ?? 0)), rule: 'undisputed_sale', refunded: m$(refunded), unreturned_fee: m$(fee), fee_on_charge: m$(chargeFee), full_recovery: m$(full), capped: amountCents < full, fee_rate: rateWords(fees), fee_source: fees.source } },
     async (key) => {
-      const created = await createVaultOrder({ vaultId: token.vault_id, source: 'paypal', amount, currency, customId: ruling.id, invoiceId: caseRef, description: `Recourse ruling ${ruling.id} (${caseRef}): agent fault liability` }, key);
+      const created = await createVaultOrder({ vaultId: token.vault_id, source: 'paypal', amount, currency, customId: ruling.id, invoiceId: caseRef, description: `Recourse decision ${ruling.id} (${caseRef}): agent fault liability` }, key);
       if (created.status < 300 && created.body?.status !== 'COMPLETED') {
         const cap = await captureOrder(created.body.id, `${key}:capture`);
         return { ...cap, body: { ...cap.body, id: created.body.id } };
@@ -257,7 +257,7 @@ async function invoiceOperator(ob: ObligationRow, caseRef: string, operator: any
   const inv = await runAction(
     ob, caseRef, 'INVOICE_OPERATOR', { value: amount, currency }, { recipient: operator?.email, reason: why },
     async () => {
-      const r = await createAndSendInvoice({ recipientEmail: operator.email, amount, currency, reference: caseRef, note: `Recourse ruling on ${caseRef}: agent fault liability. ${why}.`, item: `Agent fault liability, order ${order.order_ref}` });
+      const r = await createAndSendInvoice({ recipientEmail: operator.email, amount, currency, reference: caseRef, note: `Recourse decision on ${caseRef}: agent fault liability. ${why}.`, item: `Agent fault liability, order ${order.order_ref}` });
       return { status: r.sent?.status ?? r.created.status, debugId: r.created.debugId, headers: {}, body: { invoice_id: r.invoiceId, created: r.created.body, sent: r.sent?.body ?? null } };
     },
     (r) => ({ invoice_id: r.body?.invoice_id ?? null }),
@@ -288,7 +288,7 @@ async function executeDispute(
   if (ob.verdict === 'AGENT_FAULT') {
     const link = findLink(d, 'accept_claim');
     if (!check('paypal.offers.accept_claim', Boolean(link), link ? 'accept_claim offered' : 'accept_claim not offered now')) return done('AWAITING_PAYPAL', `${status()}; accept_claim is not offered at this status`);
-    const a = await runAction(ob, caseRef, 'DISPUTE_ACCEPT_CLAIM', amount, { dispute_id: disputeId }, () => disputeAction(link!, { note: `Recourse ruling ${ruling.id}: agent fault. The buyer is refunded.`, accept_claim_type: 'REFUND' }), () => ({ dispute_id: disputeId }), undefined, async () => {
+    const a = await runAction(ob, caseRef, 'DISPUTE_ACCEPT_CLAIM', amount, { dispute_id: disputeId }, () => disputeAction(link!, { note: `Recourse decision ${ruling.id}: agent fault. The buyer is refunded.`, accept_claim_type: 'REFUND' }), () => ({ dispute_id: disputeId }), undefined, async () => {
       const again = await getDispute(disputeId);
       return again.body?.status === 'RESOLVED' ? again : null;
     });

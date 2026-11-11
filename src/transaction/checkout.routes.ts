@@ -32,7 +32,7 @@ checkoutRoutes.post(
     if (r.status === 'STEP_UP_REQUIRED') {
       return res.status(422).json({
         name: 'STEP_UP_REQUIRED',
-        message: 'This purchase breaks the mandate. It can go ahead only if the buyer approves it directly at PayPal.',
+        message: 'This purchase breaks the instructions. It can go ahead only if the buyer approves it directly at PayPal.',
         details: r.firewall.violations.map((v) => ({ field: v.rule, issue: 'MANDATE_VIOLATION', description: v.detail })),
         step_up: r.step_up,
         firewall: r.firewall,

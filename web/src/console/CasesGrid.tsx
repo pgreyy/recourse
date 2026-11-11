@@ -1,7 +1,7 @@
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, GridApi, RowClickedEvent } from 'ag-grid-community';
 import { useMemo, useRef, useState } from 'react';
-import { api, ErrorNote, Id, money, navigate, plural, SettlementStatus, shortWhen, Status, useLoad, Verdict, verdictLabel } from '../lib';
+import { api, ErrorNote, Id, money, navigate, plural, SettlementStatus, shortWhen, Status, useLoad, Verdict, verdictLabel, caseStatusWords } from '../lib';
 import { gridTheme } from './gridTheme';
 import { nextStep } from './Overview';
 
@@ -38,7 +38,7 @@ export function CasesGrid() {
       { colId: 'amount', headerName: 'Amount', type: 'rightAligned', headerTooltip: 'Group rows show the sum', valueGetter: (p) => (p.data?.amount ? Number(p.data.amount.value) : null), valueFormatter: (p) => (p.data?.amount ? money(p.data.amount) : p.value != null ? p.value.toFixed(2) : ''), aggFunc: 'sum', filter: 'agNumberColumnFilter', minWidth: 100, maxWidth: 116 },
       {
         colId: 'verdict',
-        headerName: 'Verdict',
+        headerName: 'Finding',
         valueGetter: (p) => (p.data ? verdictLabel(p.data.verdict) : undefined),
         rowGroup: group === 'verdict',
         hide: group === 'verdict',
@@ -61,7 +61,7 @@ export function CasesGrid() {
           <span className="small muted">Group by</span>
           {(['none', 'verdict', 'agent'] as GroupBy[]).map((g) => (
             <button key={g} className={`btn small ${group === g ? '' : 'secondary'}`} aria-pressed={group === g} onClick={() => setGroup(g)}>
-              {g === 'none' ? 'None' : g === 'verdict' ? 'Verdict' : 'Agent'}
+              {g === 'none' ? 'None' : g === 'verdict' ? 'Finding' : 'Agent'}
             </button>
           ))}
         </div>
@@ -74,7 +74,7 @@ export function CasesGrid() {
           loading={r.loading && !r.data}
           columnDefs={cols}
           defaultColDef={{ flex: 1, filter: true, floatingFilter: true, sortable: true, resizable: true, wrapHeaderText: true, autoHeaderHeight: true, suppressHeaderMenuButton: true }}
-          autoGroupColumnDef={{ headerName: group === 'agent' ? 'Agent' : 'Verdict', minWidth: 150, width: 160, flex: 0, pinned: 'left' }}
+          autoGroupColumnDef={{ headerName: group === 'agent' ? 'Agent' : 'Finding', minWidth: 150, width: 160, flex: 0, pinned: 'left' }}
           groupDefaultExpanded={1}
           groupDisplayType="singleColumn"
           suppressAggFuncInHeader
@@ -112,7 +112,7 @@ function Drawer({ c, onClose }: { c: any; onClose: () => void }) {
         <dt>Opened by</dt>
         <dd>{c.source === 'PAYPAL_DISPUTE' ? `PayPal dispute ${c.dispute_id}` : 'Buyer report on the receipt'}</dd>
         <dt>Case status</dt>
-        <dd>{c.status.replace(/_/g, ' ').toLowerCase()}</dd>
+        <dd>{caseStatusWords(c.status)}</dd>
         <dt>Agent</dt>
         <dd>{c.agent ?? '—'}</dd>
         <dt>Operator</dt>

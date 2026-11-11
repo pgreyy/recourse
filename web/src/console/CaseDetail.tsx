@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, ErrorNote, Id, Modal, money, navigate, SettlementStatus, short, Status, useLoad, useLocation, Verdict, when, Who, maskEmail, plural } from '../lib';
+import { api, ErrorNote, Id, Modal, money, navigate, SettlementStatus, short, Status, useLoad, useLocation, Verdict, when, Who, maskEmail, plural, caseStatusWords, amount } from '../lib';
 import { Timeline, type Entry } from '../timeline';
 import { CalculationNote, WhoPaid } from './WhoPaid';
 
@@ -40,7 +40,7 @@ export function CaseDetail() {
               <select value={id} onChange={(e) => navigate(`/console?page=case&case=${e.target.value}`)} style={{ maxWidth: 330 }}>
                 {(list.data ?? []).map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.case_ref} ({c.source === 'PAYPAL_DISPUTE' ? 'dispute' : 'buyer report'}, {c.status.toLowerCase().replace(/_/g, ' ')})
+                    {c.case_ref} ({c.source === 'PAYPAL_DISPUTE' ? 'dispute' : 'buyer report'}, {caseStatusWords(c.status)})
                   </option>
                 ))}
               </select>
@@ -107,7 +107,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
               <h1 className="mono" style={{ fontSize: 20, fontFamily: 'var(--mono)' }}>
                 {c.case_ref}
               </h1>
-              <Status tone={c.status === 'CLOSED' ? 'neutral' : 'accent'}>{c.status.replace(/_/g, ' ').toLowerCase()}</Status>
+              <Status tone={c.status === 'CLOSED' ? 'neutral' : 'accent'}>{caseStatusWords(c.status)}</Status>
             </div>
             <p className="muted" style={{ marginTop: 4 }}>
               {c.source === 'PAYPAL_DISPUTE' ? `Opened by PayPal dispute ${c.dispute_id}` : 'Opened by the buyer from the receipt'} on {when(c.created_at)}. Order {order?.order_ref}, {money(order?.total)}
@@ -186,7 +186,7 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
         </p>
         {proposal && (
           <div className="notice" role="status" style={{ marginTop: 12 }}>
-            The Clerk proposed: <strong>{proposal.replace(/_/g, ' ')}</strong>. It cannot act. Review the evidence below; only the buttons above carry it out.
+            The Clerk proposed: <strong>{proposal === 'approve_ruling' ? 'approve the decision' : proposal.replace(/_/g, ' ')}</strong>. It cannot act. Review the evidence below; only the buttons above carry it out.
           </div>
         )}
         <ErrorNote error={err} />
@@ -361,22 +361,36 @@ function CaseBody({ id, proposal, picker }: { id: string; proposal: string | nul
                 </Block>
               </>
             )}
-            <details>
-              <summary className="small" style={{ cursor: 'pointer' }}>
-                {code_checks.filter((x) => x.status === 'PASS').length} of {code_checks.length} evidence checks pass
-              </summary>
-              <ul className="checklist" style={{ marginTop: 6 }}>
-                {code_checks.map((x) => (
-                  <li key={x.id}>
-                    <Status tone={CHECK_TONE[x.status] ?? 'neutral'}>{checkLabel(x.status)}</Status>
-                    <span>
-                      <span className="mono small">{x.id}</span> {x.detail}
-                    </span>
-                    <Who by="code" />
-                  </li>
-                ))}
-              </ul>
-            </details>
+            {(() => {
+              // Only checks that apply are counted; not-applicable ones are listed apart, never as a failure.
+              const applies = code_checks.filter((x) => x.status !== 'NOT_APPLICABLE');
+              const na = code_checks.filter((x) => x.status === 'NOT_APPLICABLE');
+              const passed = applies.filter((x) => x.status === 'PASS').length;
+              const item = (x: any) => (
+                <li key={x.id}>
+                  <Status tone={CHECK_TONE[x.status] ?? 'neutral'}>{checkLabel(x.status)}</Status>
+                  <span>
+                    <span className="mono small">{String(x.id).replace(/^mandate\./, 'instructions.')}</span> {x.detail}
+                  </span>
+                  <Who by="code" />
+                </li>
+              );
+              return (
+                <details>
+                  <summary className="small" style={{ cursor: 'pointer' }}>
+                    {passed === applies.length ? `all ${plural(applies.length, 'evidence check')} pass` : `${passed} of ${plural(applies.length, 'evidence check')} pass`}
+                    {na.length ? `; ${na.length} not applicable` : ''}
+                  </summary>
+                  <ul className="checklist" style={{ marginTop: 6 }}>{applies.map(item)}</ul>
+                  {na.length > 0 && (
+                    <>
+                      <p className="small muted" style={{ marginTop: 8 }}>Not applicable to this case</p>
+                      <ul className="checklist" style={{ marginTop: 4 }}>{na.map(item)}</ul>
+                    </>
+                  )}
+                </details>
+              );
+            })()}
           </div>
         </section>
       </div>

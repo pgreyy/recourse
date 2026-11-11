@@ -54,7 +54,7 @@ async function budget(row: Row) {
   const used = await mandateUsage(row.lineage_id);
   const maxCents = Math.round(Number(spec.max_total.value) * 100);
   return {
-    rule: 'aggregate across all orders under this mandate, tax and shipping included',
+    rule: 'aggregate across all orders under these instructions, tax and shipping included',
     max_total: spec.max_total,
     spent: { value: (used.spent_cents / 100).toFixed(2), currency: spec.max_total.currency },
     remaining: { value: (Math.max(0, maxCents - used.spent_cents) / 100).toFixed(2), currency: spec.max_total.currency },
@@ -112,7 +112,7 @@ async function compileStrict(text: string) {
 function validate(input: unknown, shownDraft: unknown): MandateSpec {
   const r = MandateSpec.safeParse(input);
   if (!r.success) {
-    throw new HttpError(422, 'MANDATE_REJECTED', 'The mandate does not pass the schema. Nothing was saved.', {
+    throw new HttpError(422, 'MANDATE_REJECTED', 'The instructions do not pass the schema. Nothing was saved.', {
       issues: zodDetails(r.error),
       draft: shownDraft,
     });
@@ -166,7 +166,7 @@ mandates.post(
     const started = await startVaulting(
       { owner_type: 'BUYER', buyer_id: row.buyer_id },
       {
-        description: `Recourse mandate: ${spec.category}, up to ${spec.max_total.value} ${spec.max_total.currency} in total`.slice(0, 127),
+        description: `Recourse instructions: ${spec.category}, up to ${spec.max_total.value} ${spec.max_total.currency} in total`.slice(0, 127),
         returnUrl: `${base}/mandates/${row.id}/vault-return`,
         cancelUrl: `${base}/mandates/${row.id}/vault-cancel`,
       },
@@ -183,7 +183,7 @@ mandates.post(
       setup_token_id: started.token.setup_token_id,
       approve_url: started.approveUrl,
       paypal_debug_id: started.debugId,
-      next: 'Open approve_url as the buyer sandbox account. PayPal then redirects to vault-return, which signs the mandate and sets ACTIVE.',
+      next: 'Open approve_url as the buyer sandbox account. PayPal then redirects to vault-return, which signs the instructions and sets ACTIVE.',
     });
   }),
 );
@@ -194,14 +194,14 @@ mandates.get(
   route(async (req, res) => {
     const id = uuidParam(req.params.id, 'Mandate');
     const row = await load(id);
-    if (row.status === 'ACTIVE') return wantsPage(req) ? res.redirect(`/app/buyer?mandate=${row.id}&paypal=approved`) : res.json(await view(row)); // reload of the return page
+    if (row.status === 'ACTIVE') return wantsPage(req) ? res.redirect(`/app/buyer?instructions=${row.id}&paypal=approved`) : res.json(await view(row)); // reload of the return page
     if (row.status !== 'DRAFT' || !row.payment_token_id) {
       throw new HttpError(409, 'MANDATE_NOT_PENDING', `Mandate is ${row.status}; call POST /mandates/${id}/approve first.`);
     }
     const token = await getToken(row.payment_token_id);
     const returned = typeof req.query.approval_token_id === 'string' ? req.query.approval_token_id : undefined;
     if (returned && returned !== token?.setup_token_id) {
-      throw new HttpError(400, 'TOKEN_MISMATCH', 'approval_token_id does not match the setup token issued for this mandate.');
+      throw new HttpError(400, 'TOKEN_MISMATCH', 'approval_token_id does not match the setup token issued for these instructions.');
     }
     const signer = loadSigner();
     await tx(async (c) => {
@@ -219,7 +219,7 @@ mandates.get(
         active.paypal_customer_id,
       ]);
     });
-    if (wantsPage(req)) return res.redirect(`/app/buyer?mandate=${id}&paypal=approved`);
+    if (wantsPage(req)) return res.redirect(`/app/buyer?instructions=${id}&paypal=approved`);
     res.json(await view(await load(id)));
   }),
 );
@@ -231,7 +231,7 @@ mandates.get(
     if (row.payment_token_id) {
       await db().query(`UPDATE payment_tokens SET status = 'FAILED' WHERE id = $1 AND status = 'PENDING'`, [row.payment_token_id]);
     }
-    if (wantsPage(req)) return res.redirect(`/app/buyer?mandate=${row.id}&paypal=cancelled`);
+    if (wantsPage(req)) return res.redirect(`/app/buyer?instructions=${row.id}&paypal=cancelled`);
     res.json({ mandate_id: row.id, status: row.status, message: 'Approval was cancelled at PayPal. Call approve again for a new link.' });
   }),
 );

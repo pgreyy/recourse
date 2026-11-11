@@ -1,4 +1,4 @@
-import { Who } from '../lib';
+import { amount, Who } from '../lib';
 
 export type WhoPaidData = {
   currency: string;
@@ -14,19 +14,19 @@ export function CalculationNote({ c, ccy }: { c: Calculation; ccy: string }) {
   return (
     <span>
       {c.rule === 'undisputed_sale'
-        ? `Covers the refund (${c.refunded}) and PayPal's fee on this charge (${c.fee_on_charge}): ${c.full_recovery} ${ccy}`
-        : `Covers the refund (${c.refunded}), the fee PayPal kept on the refund (${c.unreturned_fee}), and the fee on this charge (${c.fee_on_charge}): ${c.full_recovery} ${ccy}`}
+        ? `Covers the refund (${amount(c.refunded)}) and PayPal's fee on this charge (${amount(c.fee_on_charge)}): ${amount(c.full_recovery, ccy)}`
+        : `Covers the refund (${amount(c.refunded)}), the fee PayPal kept on the refund (${amount(c.unreturned_fee)}), and the fee on this charge (${amount(c.fee_on_charge)}): ${amount(c.full_recovery, ccy)}`}
       {c.capped ? ', limited by the agreement caps' : ''}. PayPal fee {c.fee_rate}, which {c.fee_source.replace(/^(matches|closest to)/, (w) => (w === 'matches' ? 'matches' : 'is closest to'))}.
     </span>
   );
 }
 
-const sign = (v: string) => (Number(v) > 0 ? `+${v}` : Number(v) < 0 ? v : '0.00');
+const sign = (v: string) => (Number(v) > 0 ? `+${amount(v)}` : Number(v) < 0 ? `-${amount(Math.abs(Number(v)))}` : '0.00');
 
 /** "Booking captured +340.00, PayPal fee on the booking -12.36, ... = 0.00": the merchant's PayPal cash flows. */
 const flowWords = (w: WhoPaidData) =>
-  `${w.merchant.cash_flows.map((f) => `${f.label} ${sign(f.amount)}`).join(', ')}: the merchant kept ${w.merchant.order_net}. ` +
-  `An undisputed sale would have left it ${w.merchant.undisputed_net ?? w.merchant.booking_price} (the ${w.merchant.booking_price} booking less PayPal's ${w.merchant.booking_fee ?? '0.00'} fee, which the merchant pays on any sale)`;
+  `${w.merchant.cash_flows.map((f) => `${f.label} ${sign(f.amount)}`).join(', ')}: the merchant kept ${amount(w.merchant.order_net)}. ` +
+  `An undisputed sale would have left it ${amount(w.merchant.undisputed_net ?? w.merchant.booking_price)} (the ${amount(w.merchant.booking_price)} booking less PayPal's ${amount(w.merchant.booking_fee ?? '0.00')} fee, which the merchant pays on any sale)`;
 
 /** Who paid what, once settled: figures only from PayPal-confirmed settlement records. */
 export function WhoPaid({ w, compact }: { w: WhoPaidData; compact?: boolean }) {
@@ -34,7 +34,7 @@ export function WhoPaid({ w, compact }: { w: WhoPaidData; compact?: boolean }) {
   if (compact) {
     return (
       <span className="small" style={{ lineHeight: 1.35, display: 'block', whiteSpace: 'normal' }}>
-        Buyer <span className="mono">{sign(w.buyer.refunded)}</span> · Merchant's loss <span className="mono" title={flowWords(w)}>{w.merchant.loss_after_recovery}</span> · Operator <span className="mono">-{w.operator.charged}</span>
+        Buyer <span className="mono">{sign(w.buyer.refunded)}</span> · Merchant's loss <span className="mono" title={flowWords(w)}>{amount(w.merchant.loss_after_recovery)}</span> · Operator <span className="mono">-{amount(w.operator.charged)}</span>
       </span>
     );
   }
@@ -47,25 +47,25 @@ export function WhoPaid({ w, compact }: { w: WhoPaidData; compact?: boolean }) {
         <tbody>
           <tr>
             <th scope="row">Buyer</th>
-            <td className="num">+{w.buyer.refunded} {ccy}</td>
+            <td className="num">+{amount(w.buyer.refunded, ccy)}</td>
             <td className="small muted">refunded{w.buyer.refund_id ? `, PayPal refund ${w.buyer.refund_id}` : ''}</td>
           </tr>
           <tr>
             <th scope="row">Merchant's loss after recovery</th>
             <td className="num" title={flowWords(w)}>
-              {w.merchant.loss_after_recovery} {ccy}
+              {amount(w.merchant.loss_after_recovery, ccy)}
             </td>
             <td className="small muted">
-              {Number(w.merchant.loss_after_recovery) === 0 ? '(same as an undisputed sale) ' : `(${w.merchant.loss_after_recovery} less than an undisputed sale) `}
+              {Number(w.merchant.loss_after_recovery) === 0 ? '(same as an undisputed sale) ' : `(${amount(w.merchant.loss_after_recovery)} less than an undisputed sale) `}
               from PayPal's records of the capture, the refund and the operator charge
             </td>
           </tr>
           <tr>
             <th scope="row">Operator</th>
-            <td className="num">-{w.operator.charged} {ccy}</td>
+            <td className="num">-{amount(w.operator.charged, ccy)}</td>
             <td className="small muted">
               charged{w.operator.capture_id ? `, PayPal capture ${w.operator.capture_id}` : ''}
-              {w.operator.agreement ? `; agreement v${w.operator.agreement.version}, ${w.operator.agreement.cap_remaining} of ${w.operator.agreement.aggregate_cap} total cap left` : ''}
+              {w.operator.agreement ? `; agreement v${w.operator.agreement.version}, ${amount(w.operator.agreement.cap_remaining)} of ${amount(w.operator.agreement.aggregate_cap)} total cap left` : ''}
             </td>
           </tr>
         </tbody>

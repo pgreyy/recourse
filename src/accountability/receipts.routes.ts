@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { route } from '../shared/http/errors';
 import { confirmReceipt, loadReceipt, parseReceiptToken, reportIssue, requestCancellation, type ReceiptView } from './receipts';
+import { amountText } from '../shared/words';
 
 export const receipts = Router();
 
@@ -24,10 +25,10 @@ function outcome(r: NonNullable<ReceiptView>): string {
   const f = r.refund as { value: string; currency: string; confirmation: string; confirmed_at: string | null; completed_at: string | null; refund_id: string | null } | null;
   const ru = r.ruling as { verdict: string; status: string; approved_at: string; case_status: string; source: string } | null;
   if (f && f.confirmation === 'confirmed') {
-    return `<section class="sec outcome ok" role="status"><h2>Outcome</h2><p><strong>Resolved: refunded ${esc(f.value)} ${esc(f.currency.trim())} on ${esc(day(f.confirmed_at ?? f.completed_at!))}.</strong></p><p class="muted">Confirmed by PayPal${f.refund_id ? `, refund ${esc(f.refund_id)}` : ''}.${ru?.verdict === 'AGENT_FAULT' ? " The agent's operator covers the cost." : ''} You do not need to file a dispute.</p></section>`;
+    return `<section class="sec outcome ok" role="status"><h2>Outcome</h2><p><strong>Resolved: refunded ${esc(amountText(f.value))} ${esc(f.currency.trim())} on ${esc(day(f.confirmed_at ?? f.completed_at!))}.</strong></p><p class="muted">Confirmed by PayPal${f.refund_id ? `, refund ${esc(f.refund_id)}` : ''}.${ru?.verdict === 'AGENT_FAULT' ? " The agent's operator covers the cost." : ''} You do not need to file a dispute.</p></section>`;
   }
   if (f) {
-    return `<section class="sec outcome" role="status"><h2>Outcome</h2><p><strong>Refund of ${esc(f.value)} ${esc(f.currency.trim())} issued on ${esc(day(f.completed_at!))}.</strong></p><p class="muted">Waiting for PayPal to confirm it.</p></section>`;
+    return `<section class="sec outcome" role="status"><h2>Outcome</h2><p><strong>Refund of ${esc(amountText(f.value))} ${esc(f.currency.trim())} issued on ${esc(day(f.completed_at!))}.</strong></p><p class="muted">Waiting for PayPal to confirm it.</p></section>`;
   }
   if (!ru) return '';
   const v = VERDICT_WORDS[ru.verdict] ?? ru.verdict.toLowerCase().replace(/_/g, ' ');
@@ -62,14 +63,14 @@ function page(r: NonNullable<ReceiptView>, token: string, notice?: string): stri
   const booking = Boolean(spec.stay);
   const cancel = r.cancellation as { kind: string; reason?: string; refund_id?: string; amount?: { value: string; currency: string } } | null;
   const asked = spec.stay
-    ? `hotel stay in ${spec.stay.city}, ${spec.stay.check_in} to ${spec.stay.check_out} (${spec.stay.nights} nights)${spec.stay.min_stars ? `, ${spec.stay.min_stars} stars or more` : ''}${spec.stay.refund_policy === 'REFUNDABLE' ? ', refundable' : ''}, up to ${spec.max_total.value} ${spec.max_total.currency} in total`
-    : `${spec.category}, up to ${spec.max_total.value} ${spec.max_total.currency} in total, by ${spec.deadline}`;
+    ? `hotel stay in ${spec.stay.city}, ${spec.stay.check_in} to ${spec.stay.check_out} (${spec.stay.nights} nights)${spec.stay.min_stars ? `, ${spec.stay.min_stars} stars or more` : ''}${spec.stay.refund_policy === 'REFUNDABLE' ? ', refundable' : ''}, up to ${amountText(spec.max_total.value)} ${spec.max_total.currency} in total`
+    : `${spec.category}, up to ${amountText(spec.max_total.value)} ${spec.max_total.currency} in total, by ${spec.deadline}`;
   const lineText = (l: (typeof lines)[number]) =>
     l.attributes.stay
       ? `${esc(l.name)}: ${esc(l.attributes.stay.city)}, ${esc(l.attributes.stay.check_in)} to ${esc(l.attributes.stay.check_out)} (${l.attributes.stay.nights} nights)${l.attributes.stay.stars ? `, ${l.attributes.stay.stars} stars` : ''}, ${l.attributes.stay.refund_policy === 'REFUNDABLE' ? 'refundable' : l.attributes.stay.refund_policy === 'NON_REFUNDABLE' ? 'non-refundable' : 'no refund policy given'}, ${esc(l.price)} ${esc(r.currency)}`
       : `${esc(l.quantity)} × ${esc(l.name)}, size ${esc(l.attributes.size ?? '')} ${l.attributes.unit_system ? esc(l.attributes.unit_system) : '(no size system given)'}${l.attributes.gender ? `, ${esc(l.attributes.gender)}'s` : ''}, ${esc(l.price)} ${esc(r.currency)}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Purchase receipt</title>
+<title>${booking ? 'Booking receipt' : 'Purchase receipt'}</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpolygon points='16.00,0.60 17.84,2.02 19.99,1.12 21.40,2.97 23.70,2.66 24.58,4.81 26.89,5.11 27.19,7.42 29.34,8.30 29.03,10.60 30.88,12.01 29.98,14.16 31.40,16.00 29.98,17.84 30.88,19.99 29.03,21.40 29.34,23.70 27.19,24.58 26.89,26.89 24.58,27.19 23.70,29.34 21.40,29.03 19.99,30.88 17.84,29.98 16.00,31.40 14.16,29.98 12.01,30.88 10.60,29.03 8.30,29.34 7.42,27.19 5.11,26.89 4.81,24.58 2.66,23.70 2.97,21.40 1.12,19.99 2.02,17.84 0.60,16.00 2.02,14.16 1.12,12.01 2.97,10.60 2.66,8.30 4.81,7.42 5.11,5.11 7.42,4.81 8.30,2.66 10.60,2.97 12.01,1.12 14.16,2.02' fill='%230b4f4a' stroke='%230b4f4a' stroke-width='.8' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='16' r='11.6' fill='none' stroke='%23f6f3ec' stroke-width='1.2' stroke-opacity='.6'/%3E%3Cpath d='M11.6 13.3h6.5a3.85 3.85 0 0 1 0 7.7h-5.1' fill='none' stroke='%23f6f3ec' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M14.6 10.3 11.6 13.3l3 3' fill='none' stroke='%23f6f3ec' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,500..600,50&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -105,13 +106,13 @@ dl{grid-template-columns:1fr;gap:0}dt{margin-top:8px}dt:first-child{margin-top:0
 </style></head><body>
 ${HEADER}
 <main>
-<h1>Purchase receipt</h1>
+<h1>${booking ? 'Booking receipt' : 'Purchase receipt'}</h1>
 ${notice ? `<p class="notice" role="status">${esc(notice)}</p>` : ''}
 <article class="sheet">
 <section class="sec"><h2>Compliance</h2><span class="badge ${st.cls}">${esc(st.label)}</span><p class="muted">${esc(st.text)}</p></section>
 <section class="sec"><h2>What you asked for</h2><p class="quote">${esc(r.source_text)}</p>
 <p class="muted">Instructions v${esc(r.mandate_version)}: ${esc(asked)}</p></section>
-<section class="sec"><h2>${booking ? 'What was booked' : 'What was bought'}</h2><ul>${lines.map((l) => `<li>${lineText(l)}</li>`).join('')}</ul><p>Total <strong class="amt">${esc(r.total)} ${esc(r.currency)}</strong> from ${esc(r.merchant_name)}</p></section>
+<section class="sec"><h2>${booking ? 'What was booked' : 'What was bought'}</h2><ul>${lines.map((l) => `<li>${lineText(l)}</li>`).join('')}</ul><p>Total <strong class="amt">${esc(amountText(r.total))} ${esc(r.currency)}</strong> from ${esc(r.merchant_name)}</p></section>
 <section class="sec"><h2>Differences</h2>${
     r.differences.length ? `<ul>${r.differences.map((d: string) => `<li class="warn">${esc(d)}</li>`).join('')}</ul>` : '<p class="ok">None found.</p>'
   }${r.matches.length ? `<p class="muted">Matches: ${esc(r.matches.join('; '))}</p>` : ''}</section>

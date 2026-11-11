@@ -42,7 +42,8 @@ export function Scorecard() {
   return (
     <div className="w grid-w" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <ErrorNote error={r.error} />
-      <div style={{ height: Math.min(56 + runs.length * 42 + 2, 260) }}>
+      {/* flex: none, so the per-case grid below (flex: 1, min 360 px) can never squeeze the run rows away. */}
+      <div style={{ height: Math.min(56 + Math.max(runs.length, 1) * 42 + 2, 260), flex: 'none' }}>
         <AgGridReact
           theme={gridTheme}
           rowData={runs}

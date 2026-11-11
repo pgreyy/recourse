@@ -31,11 +31,73 @@ const WORDS: Array<[RegExp, string]> = [
   [/\bMandates\b/g, 'Instructions'],
   [/\bmandate\b/g, 'instructions'],
   [/\bMandate\b/g, 'Instructions'],
+  [/\bRULING_APPROVED\b/g, 'DECISION_APPROVED'],
+  [/\bRULED\b/g, 'DECISION APPROVED'],
+  [/\bverdicts\b/g, 'findings'],
+  [/\bVerdicts\b/g, 'Findings'],
+  [/\bverdict\b/g, 'finding'],
+  [/\bVerdict\b/g, 'Finding'],
   [/\brulings\b/g, 'decisions'],
   [/\bRulings\b/g, 'Decisions'],
   [/\bruling\b/g, 'decision'],
   [/\bRuling\b/g, 'Decision'],
 ];
+/** Amounts in one format everywhere: "1,000.00". Anything that is not a number is returned as it is. */
+export function amountText(v: string | number | null | undefined): string {
+  const n = Number(v);
+  if (v === null || v === undefined || v === '' || !Number.isFinite(n)) return String(v ?? '');
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** "11 Nov 2026, 00:59 UTC" for an ISO timestamp. */
+export function dateWords(iso: string): string {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return iso;
+  return `${t.getUTCDate()} ${t.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })} ${t.getUTCFullYear()}, ${t.toISOString().slice(11, 16)} UTC`;
+}
+
+const ACTION_WORDS: Record<string, string> = {
+  REFUND_BUYER: 'buyer refund',
+  CHARGE_OPERATOR: 'operator charge',
+  INVOICE_OPERATOR: 'operator invoice',
+  REFUND_OPERATOR: 'refund to the operator',
+  DISPUTE_ESCALATE: 'dispute escalated',
+  DISPUTE_PROVIDE_EVIDENCE: 'evidence sent to PayPal',
+  DISPUTE_ACCEPT_CLAIM: 'dispute claim accepted',
+  DISPUTE_MAKE_OFFER: 'dispute offer made',
+};
+const CODE_WORDS: Record<string, string> = {
+  AGENT_FAULT: 'agent fault',
+  MERCHANT_FAULT: 'merchant fault',
+  BUYER_REMORSE: "buyer's remorse",
+  THIRD_PARTY_FAULT: 'third-party fault',
+  INCONCLUSIVE: 'inconclusive',
+  RECOVERED: 'recovered',
+  AWAITING_CONFIRMATION: 'awaiting confirmation',
+  AWAITING_PAYPAL: 'awaiting PayPal',
+  BUYER_REFUNDED: 'buyer refunded',
+  COMPLETED: 'completed',
+  NO_ACTION: 'no action',
+  INVOICED: 'invoiced',
+  DECISION_APPROVED: 'decision approved',
+  RULING_APPROVED: 'decision approved',
+  NEEDS_HUMAN_REVIEW: 'needs human review',
+};
+
+/**
+ * Text for people from text that may carry internal codes (REFUND_BUYER SUCCEEDED, AGENT_FAULT) or raw timestamps:
+ * codes become plain words and timestamps read "11 Nov 2026, 00:59 UTC". PayPal ids are left as they are.
+ */
+export function plainCodes(text: string): string {
+  let s = text.replace(/\b(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z)\b/g, (m) => dateWords(m));
+  s = s.replace(/\b(REFUND_BUYER|CHARGE_OPERATOR|INVOICE_OPERATOR|REFUND_OPERATOR|DISPUTE_[A-Z_]+)\s+(SUCCEEDED|FAILED|INTENDED|UNCERTAIN)\b/g, (_m, a: string, st: string) =>
+    `${ACTION_WORDS[a] ?? a.toLowerCase().replace(/_/g, ' ')} ${st === 'SUCCEEDED' ? 'succeeded' : st === 'FAILED' ? 'failed' : 'in progress'}`,
+  );
+  s = s.replace(/\b(REFUND_BUYER|CHARGE_OPERATOR|INVOICE_OPERATOR|REFUND_OPERATOR|DISPUTE_[A-Z_]+)\b/g, (a) => ACTION_WORDS[a] ?? a.toLowerCase().replace(/_/g, ' '));
+  s = s.replace(/\b[A-Z]+(?:_[A-Z]+)+\b|\b(RECOVERED|INCONCLUSIVE|COMPLETED|INVOICED)\b/g, (c) => CODE_WORDS[c] ?? c);
+  return s;
+}
+
 export function instructionWords(text: string): string {
   let s = text;
   for (const [re, w] of WORDS) s = s.replace(re, w);

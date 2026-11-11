@@ -5,7 +5,7 @@ const EXAMPLE = 'Refundable hotel in Lisbon, Nov 20 to 22, under $400 total, 4 s
 
 export function Buyer() {
   const { query } = useLocation();
-  const id = query.get('mandate');
+  const id = query.get('instructions') ?? query.get('mandate'); // older links used ?mandate=
   const paypal = query.get('paypal');
   const [text, setText] = useState(EXAMPLE);
   const [email, setEmail] = useState('');
@@ -18,7 +18,7 @@ export function Buyer() {
     setErr(null);
     try {
       const r = await api<{ id: string }>('/mandates', { body: { buyer_email: email, text } });
-      navigate(`/buyer?mandate=${r.id}`);
+      navigate(`/buyer?instructions=${r.id}`);
     } catch (e) {
       setErr(e as Error);
     } finally {

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { instructionWords } from '../shared/words';
+import { instructionWords, plainCodes } from '../shared/words';
 import { z } from 'zod';
 import { env } from '../config';
 import { reserveAiCall } from '../shared/ai/budget';
@@ -72,7 +72,7 @@ export function moneyFactProblems(answer: string, outputs: string[], question = 
     // Say why, from the ruling, and do not offer a proposal: there is no way to propose a refund.
     const verdicts = [...new Set([...outputs.join('\n').matchAll(/"verdict":"([A-Z_]+)"/g)].map((m) => m[1]))];
     const words = (v: string) => v.toLowerCase().replace(/_/g, ' ').replace('buyer remorse', 'remorse');
-    if (verdicts.length && !verdicts.some((v) => answer.includes(v) || answer.toLowerCase().includes(words(v)))) problems.push(`the refusal must say why, naming the ruling (${verdicts.join(', ')})`);
+    if (verdicts.length && !verdicts.some((v) => answer.includes(v) || answer.toLowerCase().includes(words(v)))) problems.push(`the refusal must say why, naming the decision (${verdicts.join(', ')})`);
     if (/\bpropos/i.test(answer)) problems.push('there is no way to propose a refund; do not offer a proposal');
   }
   if (!MONEY_WORDS.test(answer)) return problems;
@@ -83,12 +83,17 @@ export function moneyFactProblems(answer: string, outputs: string[], question = 
   if (/no settlement/i.test(answer) && !toolSaysNoSettlement && /\bno settlement (exists|was|has|for)\b/i.test(answer)) problems.push('it says no settlement exists, but the tool results do not say that');
   for (const amt of answer.match(/\b\d{1,7}\.\d{2}\b/g) ?? []) if (!all.includes(amt)) problems.push(`amount ${amt} is not in the tool results`);
   for (const id of answer.match(/\b(?=[0-9A-Z]*\d)(?=[0-9A-Z]*[A-Z])[0-9A-Z]{17}\b|\bPP-[A-Z]-[A-Z]{3}-\d+\b/g) ?? []) if (!all.includes(id)) problems.push(`PayPal id ${id} is not in the tool results`);
-  const refunded = /REFUND_BUYER SUCCEEDED|"action":"REFUND_BUYER","status":"SUCCEEDED"|Refunded \d/.test(all);
+  const refunded = /REFUND_BUYER SUCCEEDED|"action":"REFUND_BUYER","status":"SUCCEEDED"|Refunded \d|buyer refund (confirmed|sent)/.test(all);
   for (const sentence of answer.split(/(?<=[.!?])\s+|\n+/)) {
     if (CLAIMS_REFUND.test(sentence) && !NEGATION.test(sentence) && !refunded) problems.push(`it says a refund happened or is coming, but the tool results show no refund ("${sentence.trim().slice(0, 120)}")`);
   }
   // It must quote a settlement status from the tool results, or say that no settlement exists.
-  const statuses = [...new Set([...all.matchAll(/(?:settlement status |"status":"|"settlement_status":")([A-Z_]{4,})/g)].map((m) => m[1]))];
+  const statuses = [
+    ...new Set([
+      ...[...all.matchAll(/(?:settlement status |"status":"|"settlement_status":")([A-Z_]{4,})/g)].map((m) => m[1]),
+      ...[...all.matchAll(/settlement status ([a-z][a-z ]{2,30}?)(?=[,;.]|$)/g)].map((m) => m[1]),
+    ]),
+  ];
   const norm = (x: string) => x.toLowerCase().replace(/_/g, ' ');
   const quoted = statuses.some((st) => answer.includes(st) || norm(answer).includes(norm(st)));
   if (!quoted && !(toolSaysNoSettlement && /no settlement/i.test(answer))) problems.push('it does not quote the settlement status from the tool results (call get_case or get_settlements for it), or say that no settlement exists when a tool says so');
@@ -130,12 +135,27 @@ function factsFallback(outputs: string[], question = ''): string {
     : "I could not state that reliably from the settlement records. Open the case's Settlement panel for the confirmed PayPal ids.";
 }
 
-/** Final answers say "instructions" and "decision", whatever words the model used (facts are unchanged). */
+/** Final answers say "instructions" and "decision", in plain words with readable dates, whatever the model wrote (facts are unchanged). */
 function scrub<T extends { output: any[] }>(r: T): T {
-  return { ...r, output: r.output.map((o: any) => (o.type === 'message' ? { ...o, content: (o.content ?? []).map((c: any) => (typeof c.text === 'string' ? { ...c, text: instructionWords(c.text) } : c)) } : o)) };
+  return { ...r, output: r.output.map((o: any) => (o.type === 'message' ? { ...o, content: (o.content ?? []).map((c: any) => (typeof c.text === 'string' ? { ...c, text: plainCodes(instructionWords(c.text)) } : c)) } : o)) };
 }
 
+/** Thanks, greetings and other small talk get a short reply, without a model call and without the money check. */
+const SMALL_TALK = /^\s*(ok(ay)?|k|thanks?|thank you|thx|cheers|great|cool|nice|perfect|got it|understood|hi|hello|hey|bye|goodbye)([\s,!.]+(thanks?|thank you|so much|a lot|very much|got it|great))*[\s!.]*$/i;
+
 export async function clerkTurn(body: z.infer<typeof ClerkTurn>) {
+  const last = body.input[body.input.length - 1] as any;
+  const q = lastUserText(body.input);
+  if (last?.type === 'message' && last.role === 'user' && SMALL_TALK.test(q)) {
+    const hello = /^\s*(hi|hello|hey)\b/i.test(q);
+    const bye = /\b(bye|goodbye)\b/i.test(q);
+    const text = hello
+      ? 'Hello. Ask me about a case, a settlement, an agent version or the scorecard.'
+      : bye
+        ? 'Goodbye.'
+        : "You're welcome. Ask me anything else about a case, a settlement, an agent version or the scorecard.";
+    return { id: randomUUID(), createdAt: Date.now(), status: 'completed', output: [{ id: randomUUID(), kind: 'output', type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'text', text, annotations: [] }] }], model: 'none (small talk)' };
+  }
   return scrub(await clerkTurnRaw(body));
 }
 

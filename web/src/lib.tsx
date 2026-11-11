@@ -216,6 +216,21 @@ const VERDICT_TONE: Record<string, Tone> = {
   THIRD_PARTY_FAULT: 'neutral',
   INCONCLUSIVE: 'warn',
 };
+/** A case's status in words. Stored codes keep their names; the screen never says "ruling". */
+export const caseStatusWords = (s?: string | null) => {
+  const words: Record<string, string> = { RULING_APPROVED: 'decision approved', NEEDS_HUMAN_REVIEW: 'needs human review', OPEN: 'open', ASSESSED: 'assessed', APPEALED: 'appealed', CLOSED: 'closed' };
+  return s ? (words[s] ?? s.replace(/_/g, ' ').toLowerCase()) : '';
+};
+
+/** Amounts in one format everywhere: 1,000.00 (with the currency when given). */
+export const amount = (v?: string | number | null, currency?: string) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  const t = n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return currency ? `${t} ${currency}` : t;
+};
+
 export const verdictLabel = (v?: string | null) => (v ? v.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()) : 'Not assessed');
 export function Verdict({ v }: { v?: string | null }) {
   return <Status tone={v ? VERDICT_TONE[v] ?? 'neutral' : 'neutral'}>{verdictLabel(v)}</Status>;

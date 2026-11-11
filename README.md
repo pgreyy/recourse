@@ -66,7 +66,7 @@ settlement.
    step. "A compliant alternative existed" is a fact computed by code, not an opinion from a model.
 3. **The decision trail anchored in PayPal.** Every agent step is recorded in a hash-chained decision log; the log's
    head hash is written into the PayPal order.
-4. **A decision that shows its work and its money.** The case shows why each other verdict does not fit, each line
+4. **A decision that shows its work and its money.** The case shows why each other finding does not fit, each line
    tagged Code or AI by where its fact came from; the operator gets its own view of the decision with the evidence, a
    preview of the money and its remaining cap, and Accept or Appeal; once settled, "who paid what" shows the buyer,
    the merchant and the operator from PayPal-confirmed records only.
@@ -89,9 +89,9 @@ click path. In short:
 | Instruction rules | The model drafts them from plain English; code validates them against a strict schema; the buyer approves; Recourse signs (Ed25519) | Signed instructions, signature checked on every read |
 | Checkout firewall | Code only: city, exact dates and nights, total within budget, minimum stars, refund policy (a missing one warns), budget across all bookings, substitution, operator coverage, agent reputation | Pass, Warning (proceeding recorded) or Block (buyer approval at PayPal) |
 | Evidence checks | Code only: signature on the instructions, PayPal order and capture re-read, `custom_id`, `invoice_id`, amounts, hash chain, snapshot hash, booking confirmation, receipt | Each check tagged **Code** on the case screen |
-| Counterfactual, and why not the other verdicts | Code, from the frozen snapshot and the records; a line the records alone can't support points to the assessment and is tagged AI | Tagged **Code** or **AI** |
+| Counterfactual, and why not the other findings | Code, from the frozen snapshot and the records; a line the records alone can't support points to the assessment and is tagged AI | Tagged **Code** or **AI** |
 | Instruction-like text in evidence | Code flags it (for example "Ignore previous instructions" in a rate description or an operator statement); the model is told it is data | Tagged **Code** |
-| Verdict and reasoning | The model proposes from a structured evidence pack; code validates it (it may only cite real steps and clauses that code did not pass, else INCONCLUSIVE) | Tagged **AI**; the model's confidence is never shown |
+| Finding and reasoning | The model proposes from a structured evidence pack; code validates it (it may only cite real steps and clauses that code did not pass, else INCONCLUSIVE) | Tagged **AI**; the model's confidence is never shown |
 | Decision | A person approves; Recourse signs it | Approve decision button |
 | Money | Code only: pre-checks, an intent stored before each PayPal call, an idempotency key as `PayPal-Request-Id`, confirmation by webhook or a re-read | Recovered only once PayPal confirms |
 
@@ -129,7 +129,7 @@ screens). API reference: [docs/reference.md](docs/reference.md).
 
 What is implemented, on AG Studio 3.1 and AG Grid 36 (Enterprise features, trial licence unless a key is set):
 
-- **Cases grid** (AG Grid): row grouping by verdict or by agent version (group rows sum the amount and the recovered
+- **Cases grid** (AG Grid): row grouping by finding or by agent version (group rows sum the amount and the recovered
   amount), set and floating filters, sorting, and a summary drawer on row select.
 - **Overview** (AG Studio, view mode): built-in `value` tiles, an integrated `column-chart-stacked` chart ("Recovered vs
   pending by agent version", named measures for its legend) and a built-in `grid` widget for operator exposure, all on
@@ -181,7 +181,7 @@ Every id below is a PayPal sandbox id from a run on the hosted demo on 2026-11-1
   INCONCLUSIVE is the safe failure: it never becomes a decision. The one miss (TBL-01, a compliant booking with a vague
   complaint) was expected INCONCLUSIVE and came back BUYER_REMORSE. One run, so small differences are noise.
 - **Prompt injection.** Instruction-like text in a rate description and in an operator statement is flagged by code;
-  every injection case in the run above got the expected verdict.
+  every injection case in the run above got the expected finding.
 - **The Clerk's money facts.** A server check rejects any Clerk answer whose amounts, PayPal ids or refund claims are
   not in that answer's tool results. On the scenario A case, three check questions ("is it refunded?", "how much was
   recovered from Wayfare Agents?", "refund it") passed, and the Clerk refused to refund

@@ -12,6 +12,11 @@ const CLAUSE: Record<string, string> = {
   'orders.max': 'number of orders',
   substitution: 'substitution',
   deadline: 'deadline',
+  'stay.refund_policy': 'refund policy',
+  'stay.city': 'city',
+  'stay.dates': 'dates',
+  'stay.nights': 'nights',
+  'stay.stars': 'stars',
 };
 
 /** Field names the model sometimes repeats from the evidence pack, as words. */
@@ -25,6 +30,11 @@ const FIELD: Array<[RegExp, string]> = [
   [/\bmandate\.clauses\b/gi, "the clauses of the instructions"],
   [/\b(?:unit_system|size_system)\s*(?:=|:|is)?\s*null\b/gi, 'no size system'],
   [/\b(?:unit_system|size_system)\b/gi, 'size system'],
+  [/\b(?:refund_policy)\s*(?:=|:|is)\s*null\b/gi, 'refund policy was not provided'],
+  // Programming words: "is null" becomes "was not provided"; a lone null or undefined becomes "not provided".
+  [/\b(?:is|was|are|were)\s+(?:null|undefined)\b/gi, 'was not provided'],
+  [/\s*(?:=|:)\s*(?:null|undefined)\b/gi, ' was not provided'],
+  [/\b(?:null|undefined)\b/gi, 'not provided'],
 ];
 
 const STATUS: Record<string, string> = { UNVERIFIABLE: 'unverifiable', VIOLATION: 'a violation', WARN: 'warning', WARNING: 'warning', PASS: 'pass', CAPTURED: 'captured', READY: 'ready', INCOMPLETE: 'incomplete' };

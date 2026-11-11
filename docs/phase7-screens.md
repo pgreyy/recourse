@@ -69,7 +69,7 @@ PayPal ids), because the hosted demo had been reset; the operator's view now sho
   "Needs a decision" is a custom widget with an AG Grid in the same theme, so a row opens its case.
 - The other pages are custom widgets (`web/src/console/widgets.tsx`).
 - The cases grid and the scorecard are AG Grid (Enterprise) inside custom widgets: set filters,
-  floating filters, row grouping by verdict or agent (group rows sum amount and recovered), and a
+  floating filters, row grouping by finding or agent (group rows sum amount and recovered), and a
   detail drawer.
 - Licence: without `AG_STUDIO_LICENSE_KEY`, Studio runs in trial mode. The browser console says
   "License Key Not Found ... unlocked for trial", and Studio adds a watermark.
