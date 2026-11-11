@@ -218,22 +218,23 @@ async function recoverFromOperator(
   }
   const refunded = cents(refund?.amount?.value ?? order.total_value);
   const fee = unreturnedFeeCents(capture, refund);
-  // Gross-up: the charge also covers PayPal's fee on the charge itself, so the merchant nets exactly 0.00.
+  // Made whole = the same as an undisputed sale: the charge covers the refund plus PayPal's fee on the charge itself.
+  // The fee PayPal kept on the original booking is not covered: the merchant pays that on any normal sale.
   const fees = feeModelFrom(capture);
-  const full = grossUp(refunded + fee, fees);
+  const full = grossUp(refunded, fees);
   const used = await usedUnderAgreement(agreement.id);
   const remaining = Math.max(0, cents(agreement.aggregate_cap) - used.usedCents);
   const perIncident = cents(agreement.per_incident_cap);
   const amountCents = Math.min(full, perIncident, remaining);
   const chargeFee = feeCents(amountCents, fees);
   const m$ = (c: number) => money(c, currency).value;
-  check('cap.per_incident', full <= perIncident, `refund ${m$(refunded)} + fee PayPal kept on the refund ${m$(fee)} + fee on this charge ${m$(feeCents(full, fees))} = ${m$(full)}; per-incident cap ${m$(perIncident)}`);
+  check('cap.per_incident', full <= perIncident, `refund ${m$(refunded)} + PayPal's fee on this charge ${m$(feeCents(full, fees))} = ${m$(full)} (the booking fee ${m$(fee)} stays with the merchant, as on any sale); per-incident cap ${m$(perIncident)}`);
   if (!check('cap.aggregate', amountCents > 0, `aggregate cap ${agreement.aggregate_cap}, used ${money(used.usedCents, currency).value}, remaining ${money(remaining, currency).value}`)) {
     return done('FAILED', 'aggregate cap exhausted');
   }
   const amount = money(amountCents, currency).value;
   const charge = await runAction(
-    ob, caseRef, 'CHARGE_OPERATOR', { value: amount, currency }, { vault_id: token.vault_id, custom_id: ruling.id, invoice_id: caseRef, breakdown: { booking_capture: m$(cents(capture?.seller_receivable_breakdown?.gross_amount?.value ?? order.total_value)), booking_capture_fee: m$(cents(capture?.seller_receivable_breakdown?.paypal_fee?.value ?? 0)), refund_fee_returned: m$(cents(refund?.seller_payable_breakdown?.paypal_fee?.value ?? 0)), refunded: m$(refunded), unreturned_fee: m$(fee), fee_on_charge: m$(chargeFee), full_recovery: m$(full), capped: amountCents < full, fee_rate: rateWords(fees), fee_source: fees.source } },
+    ob, caseRef, 'CHARGE_OPERATOR', { value: amount, currency }, { vault_id: token.vault_id, custom_id: ruling.id, invoice_id: caseRef, breakdown: { booking_capture: m$(cents(capture?.seller_receivable_breakdown?.gross_amount?.value ?? order.total_value)), booking_capture_fee: m$(cents(capture?.seller_receivable_breakdown?.paypal_fee?.value ?? 0)), refund_fee_returned: m$(cents(refund?.seller_payable_breakdown?.paypal_fee?.value ?? 0)), rule: 'undisputed_sale', refunded: m$(refunded), unreturned_fee: m$(fee), fee_on_charge: m$(chargeFee), full_recovery: m$(full), capped: amountCents < full, fee_rate: rateWords(fees), fee_source: fees.source } },
     async (key) => {
       const created = await createVaultOrder({ vaultId: token.vault_id, source: 'paypal', amount, currency, customId: ruling.id, invoiceId: caseRef, description: `Recourse ruling ${ruling.id} (${caseRef}): agent fault liability` }, key);
       if (created.status < 300 && created.body?.status !== 'COMPLETED') {
@@ -373,7 +374,9 @@ export async function whoPaid(ob: ObligationRow, actions: Array<Record<string, a
   ];
   // Net cash on this order, and the loss against the booking price the merchant was paid before the refund.
   const orderNet = flows.reduce((t, f) => t + f.cents, 0);
-  const merchantNet = orderNet - bookingGross;
+  // Made whole means: left as an undisputed sale would have left it (the booking price less PayPal's fee on it).
+  const undisputedNet = bookingGross - bookingFee;
+  const merchantNet = orderNet - undisputedNet;
   let agreement = null;
   if (ob.liability_agreement_id) {
     const la = (await db().query('SELECT version, per_incident_cap::text, aggregate_cap::text FROM liability_agreements WHERE id = $1', [ob.liability_agreement_id])).rows[0];
@@ -393,6 +396,8 @@ export async function whoPaid(ob: ObligationRow, actions: Array<Record<string, a
       cash_flows: flows.map((f) => ({ label: f.label, amount: fmt(f.cents) })),
       order_net: fmt(orderNet),
       booking_price: fmt(bookingGross),
+      booking_fee: fmt(bookingFee),
+      undisputed_net: fmt(undisputedNet),
       calculation: charge?.request?.breakdown?.fee_on_charge ? charge.request.breakdown : null,
       paypal_fee_on_recovery: recoveryFee === null ? null : fmt(recoveryFee),
     },

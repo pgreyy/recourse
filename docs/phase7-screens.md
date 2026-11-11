@@ -9,7 +9,9 @@ The screenshots show the hotel demo (Tidewell Stays, Wayfare Agents). Those with
 the Clerk, the phone case and agent run) and the scorecard are from the hosted demo after the live run of
 `CASE-20261110-A20E6BFF` on 2026-11-10; the operator's view was taken before the operator accepted, so it still shows
 Accept and Appeal. Home, operator onboarding, buyer instructions, sidebar collapsed and the phone menu and overview
-are from a local copy of the database.
+are from a local copy of the database. On 2026-11-11 the agent run, case detail, settlement and operator's view were
+retaken after interface changes, from a local restore of the hosted demo's database backup (the same records and
+PayPal ids), because the hosted demo had been reset; the operator's view now shows the accepted decision.
 
 | Screen | Path | Screenshot |
 |---|---|---|

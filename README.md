@@ -56,7 +56,8 @@ settlement.
    versioned liability agreement (for the demo: 400.00 USD per incident, 1,000.00 USD in total, a 72 hour appeal window)
    and saves a PayPal payment method for approved recoveries under this agreement. After a human-approved decision, and once the operator accepts (or its
    appeal window closes), Recourse refunds the buyer and charges the operator's saved PayPal within the signed cap,
-   enough to cover the refund and PayPal's fees on both payments, so the merchant's loss after recovery is 0.00. This
+   enough to cover the refund and PayPal's fee on that charge. The merchant ends exactly as after an undisputed sale
+   (merchant's loss after recovery 0.00): PayPal's fee on the original booking stays with the merchant, as on any sale. This
    is demonstrated in the PayPal sandbox through the demo merchant's vaulted-payment arrangement; it is not a universal
    cross-merchant mechanism. Agents without an agreement can still book, but every booking needs the buyer's approval at
    PayPal.
@@ -153,17 +154,20 @@ Every id below is a PayPal sandbox id from a run on the hosted demo on 2026-11-1
   a person approved the decision and the operator accepted it: buyer refund `6M826989RN0922432` (340.00 USD, confirmed
   by a re-read from PayPal); operator charged order `71R16486NJ703452D`, capture `7EW87576HA7150919`, 352.36 USD (the
   refund plus the 12.36 USD PayPal fee the refund did not return), confirmed by webhook. Who paid what: buyer
-  refunded 340.00, operator charged 352.36 (647.64 USD left of its 1,000.00 USD cap), merchant's loss after recovery 12.79: PayPal's
-  fee on the operator charge, which that charge did not yet cover. v1.3 then moved to step-up ("recent confirmed agent
+  refunded 340.00, operator charged 352.36 (647.64 USD left of its 1,000.00 USD cap). Measured against an undisputed sale
+  (340.00 less PayPal's 12.36 fee = 327.64), the merchant kept 327.21: a loss after recovery of 0.43, because that
+  charge was made under an earlier rule and did not cover PayPal's 12.79 fee on itself. v1.3 then moved to step-up ("recent confirmed agent
   fault").
 - **Scenario B, the careful agent.** Wayfare Booker v2.0, same instructions: it was offered the same Flexible Saver
   suggestion, refused it and booked Hotel Ribeira Alta's refundable rate. The firewall passed all 15 checks: PayPal
   order `5C182111K0149813U`, capture `95N79176XL8035127`, 380.00 USD, booking confirmation TWS-E46CF8; the receipt says
   Compliant and no case was opened.
-- **The operator charge now covers its own PayPal fee.** After scenario A, the charge was changed to the smallest
-  amount that leaves the merchant exactly 0.00 after PayPal's fee on the refund and on the charge, within the caps.
-  PayPal's rate is worked out from its own fee on the booking capture (12.36 on 340.00 gives 3.49% + 0.49, which also
-  reproduces the 12.79 on 352.36). For scenario A that would have been 365.61 USD. Not yet run on PayPal.
+- **The operator charge now covers its own PayPal fee.** After scenario A, the rule became "made whole = the same as
+  an undisputed sale": the operator pays the refund plus PayPal's fee on the charge itself, as the smallest amount
+  that does so, within the caps; PayPal's fee on the original booking stays with the merchant, as on any sale. PayPal's
+  rate is worked out from its own fee on the booking capture (12.36 on 340.00 gives 3.49% + 0.49, which also
+  reproduces the 12.79 on 352.36). For scenario A the charge would have been 352.80 USD (fee 12.80). Not yet run on
+  PayPal.
 - **Scorecard: an internal, labelled 34-case evaluation set** (24 retail, 10 travel), run through the same pipeline as
   live cases. It is evidence of behaviour on known cases, not production accuracy. gpt-5-mini, prompt hash
   `0da0a61218a5`, scorecard run `628d51ab` on 2026-11-10:
