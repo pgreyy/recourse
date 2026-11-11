@@ -120,6 +120,8 @@ accountable, not part of Recourse's decision.)
      ──▶ confirmed by webhook ──▶ who paid what ──▶ reputation ──▶ merchant checkout policy (normal / step-up / suspended)
 ```
 
+The buyer's signed instructions (what Google's AP2 calls an intent mandate) are hashed into the PayPal order.
+
 Code: `src/authorization` (instructions, operators, agreements), `src/transaction` (catalogs, carts, firewall,
 checkout, agents), `src/evidence` (recorder, snapshots), `src/accountability` (cases, checks, assessment, decisions,
 scorecard), `src/settlement` (PayPal actions, confirmation), `src/console` (the screens' API and the Clerk), `web/` (the
