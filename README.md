@@ -170,7 +170,7 @@ Every id below is a PayPal sandbox id from a run on the hosted demo on 2026-11-1
   PayPal.
 - **Scorecard: an internal, labelled 34-case evaluation set** (24 retail, 10 travel), run through the same pipeline as
   live cases. It is evidence of behaviour on known cases, not production accuracy. gpt-5-mini, prompt hash
-  `0da0a61218a5`, scorecard run `628d51ab` on 2026-11-10:
+  `ebacf8bc1644`, scorecard run `932e148f` on 2026-11-11:
 
   | Domain | Correct | Wrongly blamed an agent | Inconclusive |
   | --- | --- | --- | --- |
