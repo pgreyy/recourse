@@ -15,7 +15,7 @@ PayPal ids), because the hosted demo had been reset; the operator's view now sho
 
 | Screen | Path | Screenshot |
 |---|---|---|
-| Home (the four steps) | `/app/` | `00-home.png` |
+| Home (hero with the case card, live figures, how it works, order of trust, why operators sign) | `/app/` | `00-home.png`, `00b-home-phone.png` (390 px wide) |
 | Operator onboarding | `/app/operator` | `01-operator-onboarding.png` |
 | Buyer instructions | `/app/buyer` | `02-buyer-instructions.png`, `02b-buyer-new-instructions.png` |
 | Agent run | `/app/agent?run=<id>` | `03-agent-run.png` |

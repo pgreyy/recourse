@@ -1,3 +1,4 @@
+import { homeData } from './home';
 import { Router } from 'express';
 import { caseEvidence, caseView, findCase } from '../accountability/cases';
 import type { CaseRow } from '../accountability/material';
@@ -16,6 +17,8 @@ import { instructionWords } from '../shared/words';
 export const consoleRoutes = Router();
 
 consoleRoutes.get('/overview', route(async (_req, res) => res.json(await overview())));
+/** The home page: live figures and the story card from the latest confirmed recovery (public, read-only). */
+consoleRoutes.get('/home', route(async (_req, res) => res.json(await homeData())));
 consoleRoutes.get('/cases', route(async (_req, res) => res.json(await caseRows())));
 
 /**
