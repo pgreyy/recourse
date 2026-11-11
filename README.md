@@ -12,7 +12,7 @@ wrong because of the agent, it executes an authorised recovery from the operator
 
 - **Live app:** https://getrecourse.onrender.com/app
 - **Demo guide (the click path and sandbox logins):** https://getrecourse.onrender.com/app/judges
-- **Video:** (link coming)
+- **Demo video (2:41):** https://youtu.be/yumXwjUddDQ
 
 A working prototype on the **PayPal sandbox**, built for the PayPal AI Hackathon 2026. It covers one demo merchant
 (Tidewell Stays, a fictional hotel booking site), one covered operator with two booking agents, and one uncovered
